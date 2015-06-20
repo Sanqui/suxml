@@ -22,6 +22,9 @@ using namespace std;
 #define READ_CHAR() in->read((char*)&c, 1)
 #define READ_CHAR_NO_EOF() READ_CHAR(); if (in->eof()) throw "Early EOF"
 #define WHITESPACE " \t\n"
+#define INVALID_ELEMENT_FIRST_CHARS "-.0123456789"
+#define INVALID_ELEMENT_CHARS "!\"#$%&'()*+,;<=?@[\\]^`{|}~"
+#define TAB '\t'
 
 #define DEBUG(...) printf("\x1b[33m[%3d] ", __LINE__); printf(__VA_ARGS__); printf("\x1b[39;49m")
 
@@ -48,8 +51,11 @@ class XMLNode {
     public:
         XMLNode() {};
         bool has_children = false;
-        virtual string to_str() const {
-            return "?";
+        virtual string to_str(int depth) const {
+            return "";
+        }
+        string to_str() const {
+            return to_str(0);
         }
 };
 
@@ -59,7 +65,7 @@ class XMLContent : public XMLNode {
         bool has_children = false;
         string content;
         
-        string to_str() const {
+        string to_str(int depth) const {
             return content;
         }
 };
@@ -92,15 +98,25 @@ class XMLTag : public XMLNode {
             return "</" + element + ">";
         }
         
-        string to_str() const {
-            string out = get_start_str();
-            if (children.size()) {
+        string to_str(int depth) const {
+            if (!children.size()) {
+                return get_start_str();
+            } else {
+                string out = "";
+                out += get_start_str();
                 for (auto child_p : children) {
-                    out += (*child_p).to_str();
+                    string child_str = (*child_p).to_str(depth+1);
+                    if (!is_whitespace(child_str)) {
+                        out += "\n";
+                        out += string(depth+1, TAB);
+                        out += child_str;
+                    }
                 }
+                out += "\n";
+                out += string(depth, TAB);
                 out += get_end_str();
+                return out;
             }
-            return out;
         }
         
 };
@@ -109,18 +125,18 @@ class XMLDeclaration : public XMLTag {
     public:
         XMLDeclaration() : XMLTag() {};
         bool has_children = false;
-        string to_str() const {
+        string to_str(int depth) const {
             return "<?todo?>";
         }
 };
 
 class XMLComment : public XMLNode {
     public:
-        XMLComment() : XMLNode() {};
+        XMLComment(string comment) : XMLNode(), comment(comment) {};
         bool has_children = false;
         string comment;
-        string to_str() const {
-            return "<!-- todo -->";
+        string to_str(int depth) const {
+            return "<!--"+comment+"-->";
         }
 };
 
@@ -157,15 +173,38 @@ class XMLDocument {
                 UNREAD();
                 tag_stack.back()->children.push_back(new XMLContent(read_string_until("<")));
                 READ_CHAR();
-                if (c == '/') {
+                if (c == '!') {
+                    for (int i=0; i < 2; i++) {
+                        READ_CHAR();
+                        if (c != '-') throw "errornous tag starting with !";
+                    }
+                    // comment
+                    string comment_text = "";
+                    while (true) {
+                        comment_text += read_string_until("-");
+                        READ_CHAR();
+                        if (c == '-') break;
+                        comment_text += "-";
+                        UNREAD();
+                    }
+                    READ_CHAR();
+                    if (c != '>') throw "errornous comment, contains --";
+                    tag_stack.back()->children.push_back(new XMLComment(comment_text));
+                } else if (c == '/') {
                     element_name = read_string_until(">");
                     if (element_name != tag_stack.back()->element) {
                         throw "mismatched end tag";
                     }
                     tag_stack.pop_back();
                 } else {
+                    for (char invalid_char : INVALID_ELEMENT_FIRST_CHARS) {
+                        if (c == invalid_char) throw "invalid first character of element name";
+                    }
                     UNREAD();
-                    element_name = read_string_until(WHITESPACE ">");
+                    element_name = read_string_until(WHITESPACE "/>" INVALID_ELEMENT_CHARS);
+                    for (char invalid_char : INVALID_ELEMENT_CHARS) {
+                        if (c == invalid_char) throw "invalid character in element name";
+                    }
                     UNREAD();
                     XMLTag* tag_p = new XMLTag(element_name);
                     tag_p->attributes = read_attributes();
@@ -184,7 +223,7 @@ class XMLDocument {
         }
         
         string to_str() const {
-            return root.to_str();
+            return root.to_str(0);
         }
     private:
         ifstream* in;
@@ -219,8 +258,8 @@ class XMLDocument {
                 string name = read_string_until(WHITESPACE "=");
                 if (c != '=') throw "attribute lacks value";
                 READ_CHAR();
-                if (c != '"') throw "attribute value not in quotes";
-                string value = read_string_until("\"");
+                if (c != '"' and c != '\'') throw "attribute value not in quotes";
+                string value = read_string_until(string(1, c));
                 attributes.push_back(XMLAttribute(name, value));
             }
             return attributes;
