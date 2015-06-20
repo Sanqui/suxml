@@ -50,7 +50,8 @@ class XMLAttribute {
 class XMLNode {
     public:
         XMLNode() {};
-        bool has_children = false;
+        virtual ~XMLNode() {};
+        
         virtual string to_str(int depth) const {
             return "";
         }
@@ -62,7 +63,6 @@ class XMLNode {
 class XMLContent : public XMLNode {
     public:
         XMLContent(string content) : XMLNode(), content(content) {};
-        bool has_children = false;
         string content;
         
         string to_str(int depth) const {
@@ -74,7 +74,12 @@ class XMLTag : public XMLNode {
     public:
         XMLTag() {};
         XMLTag(string element) : XMLNode(), element(element) {};
-        bool has_children = true;
+        ~XMLTag() {
+            for (auto child_p : children) {
+                delete child_p;
+            }
+        }
+        
         string element;
         vector<XMLAttribute> attributes;
         vector<XMLNode*> children;
@@ -124,7 +129,7 @@ class XMLTag : public XMLNode {
 class XMLDeclaration : public XMLTag {
     public:
         XMLDeclaration() : XMLTag() {};
-        bool has_children = false;
+        
         string to_str(int depth) const {
             return "<?todo?>";
         }
@@ -133,7 +138,7 @@ class XMLDeclaration : public XMLTag {
 class XMLComment : public XMLNode {
     public:
         XMLComment(string comment) : XMLNode(), comment(comment) {};
-        bool has_children = false;
+        
         string comment;
         string to_str(int depth) const {
             return "<!--"+comment+"-->";
