@@ -13,6 +13,7 @@
 #include <list>
 #include <algorithm>
 #include <memory>
+#include <typeinfo>
 using namespace std;
 
 #include <ncurses.h>
@@ -47,42 +48,63 @@ class XMLNode {
     public:
         XMLNode() {};
         bool has_children = false;
-        string to_str() const {
-            return "";
+        virtual string to_str() const {
+            return "?";
         }
 };
 
 class XMLContent : public XMLNode {
     public:
-        XMLContent() {};
+        XMLContent(string content) : XMLNode(), content(content) {};
         bool has_children = false;
         string content;
+        
+        string to_str() const {
+            return content;
+        }
 };
 
 class XMLTag : public XMLNode {
     public:
         XMLTag() {};
+        XMLTag(string element) : XMLNode(), element(element) {};
         bool has_children = true;
         string element;
         vector<XMLAttribute> attributes;
-        vector<XMLNode> children;
+        vector<XMLNode*> children;
         
         string get_start_str() const {
-            return "<todo>";
+            string out = "<";
+            out += element;
+            for (XMLAttribute attr : attributes) {
+                out += " ";
+                out += attr.attribute;
+                out += "=\"";
+                out += attr.value;
+                out += "\"";
+            }
+            out += ">";
+            return out;
         }
         
         string get_end_str() const {
-            return "</todo>";
+            return "</" + element + ">";
         }
         
         string to_str() const {
-            return "<todo />";
+            string out = get_start_str();
+            for (auto child_p : children) {
+                out += (*child_p).to_str();
+            }
+            out += get_end_str();
+            return out;
         }
+        
 };
 
 class XMLDeclaration : public XMLTag {
     public:
-        XMLDeclaration() {};
+        XMLDeclaration() : XMLTag() {};
         bool has_children = false;
         string to_str() const {
             return "<?todo?>";
@@ -91,7 +113,7 @@ class XMLDeclaration : public XMLTag {
 
 class XMLComment : public XMLNode {
     public:
-        XMLComment() {};
+        XMLComment() : XMLNode() {};
         bool has_children = false;
         string comment;
         string to_str() const {
@@ -111,17 +133,7 @@ class XMLDocument {
             if (!fin.is_open() || !fin.good() || !fin) throw "cannot open file";
             in = &fin;
             
-            
-            
-            /*
-            READ_CHAR();
-            DEBUG("%c\n", c);
-            READ_CHAR();
-            DEBUG("%c\n", c);
-            READ_CHAR();
-            DEBUG("%c\n", c);
-            READ_CHAR();
-            DEBUG("%c\n", c);*/
+            vector<XMLTag*> tag_stack;
             
             if (!is_whitespace(read_string_until("<"))) throw "content before root tag";
             string element_name = read_string_until(WHITESPACE ">");
@@ -133,16 +145,38 @@ class XMLDocument {
                 //XMLDeclaration declaration = XMLDeclaration();
             } else {
                 // this is the root tag
-                root = XMLTag();
-                root.element = element_name;
+                root = XMLTag(element_name);
                 root.attributes = read_attributes();
             }
-            /*while (true) {
+            tag_stack.push_back(&root);
+            while (tag_stack.size()) {
+                read_whitespace();
+                UNREAD();
+                tag_stack.back()->children.push_back(new XMLContent(read_string_until("<")));
                 READ_CHAR();
-                if (c == '>') break;
-                else if (c == ' ') {}
-            }*/
+                if (c == '/') {
+                    element_name = read_string_until(">");
+                    if (element_name != tag_stack.back()->element) {
+                        throw "mismatched end tag";
+                    }
+                    tag_stack.pop_back();
+                } else {
+                    UNREAD();
+                    element_name = read_string_until(WHITESPACE ">");
+                    UNREAD();
+                    XMLTag* tag_p = new XMLTag(element_name);
+                    tag_p->attributes = read_attributes();
+                    tag_stack.back()->children.push_back(tag_p);
+                    tag_stack.push_back(tag_p);
+                }
+            }
+            
+            
             return true;
+        }
+        
+        string to_str() const {
+            return root.to_str();
         }
     private:
         ifstream* in;
@@ -200,10 +234,15 @@ int main() {
     getch();
     */
     XMLDocument xmldoc = XMLDocument();
-    xmldoc.parse("test.xml");
+    try {
+        xmldoc.parse("test.xml");
+    } catch (char const* message) {
+        printf("Error while parsing: %s\n", message);
+    }
     
-    DEBUG("The root element is: %s\n", xmldoc.root.element.c_str());
-    
+    DEBUG("The root element is: %s with %d children\n", xmldoc.root.element.c_str(), xmldoc.root.children.size());
+    cout << xmldoc.to_str();
+    cout << "\n";
     
     //endwin();
 }
