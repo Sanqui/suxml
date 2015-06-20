@@ -1,1 +1,4 @@
-<test>hello!</test>
+<test a="yes">
+    hello!<br />
+    <b>hi!</b>
+</test>

@@ -83,6 +83,7 @@ class XMLTag : public XMLNode {
                 out += attr.value;
                 out += "\"";
             }
+            if (!children.size()) out += " /";
             out += ">";
             return out;
         }
@@ -93,10 +94,12 @@ class XMLTag : public XMLNode {
         
         string to_str() const {
             string out = get_start_str();
-            for (auto child_p : children) {
-                out += (*child_p).to_str();
+            if (children.size()) {
+                for (auto child_p : children) {
+                    out += (*child_p).to_str();
+                }
+                out += get_end_str();
             }
-            out += get_end_str();
             return out;
         }
         
@@ -167,7 +170,12 @@ class XMLDocument {
                     XMLTag* tag_p = new XMLTag(element_name);
                     tag_p->attributes = read_attributes();
                     tag_stack.back()->children.push_back(tag_p);
-                    tag_stack.push_back(tag_p);
+                    if (c == '>') {
+                        tag_stack.push_back(tag_p);
+                    } else if (c == '/') {
+                        READ_CHAR();
+                        if (c != '>') throw "characters after / in empty-element tag";
+                    }
                 }
             }
             
@@ -206,6 +214,8 @@ class XMLDocument {
             while (true) {
                 read_whitespace();
                 if (c == '>') break;
+                if (c == '/') break;
+                UNREAD();
                 string name = read_string_until(WHITESPACE "=");
                 if (c != '=') throw "attribute lacks value";
                 READ_CHAR();
