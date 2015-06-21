@@ -92,6 +92,7 @@ class XMLNode {
             expanded = false;
             return false;
         }
+        virtual void expand_all() { expanded = true; }
         
         
         virtual vector<string> settable_parts() { return vector<string>(); }
@@ -169,6 +170,10 @@ class XMLTag : public XMLNode {
             which--;
             if (which == -1) {
                 if (text.size() == 0) return make_pair(false, -1);
+                char c = text[0];
+                for (char invalid_char : INVALID_ELEMENT_FIRST_CHARS) {
+                    if (c == invalid_char) return make_pair(false, 0);
+                }
                 int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                 if (invalid != -1) return make_pair(false, invalid);
                 element = text;
@@ -357,6 +362,13 @@ class XMLTag : public XMLNode {
             if (expanded) return true; // found in a child
             return false;
         }
+        
+        void expand_all() {
+            expanded = true;
+            for (auto& child : children) {
+                child->expand_all();
+            }
+        }
 };
 
 class XMLDeclaration : public XMLTag {
@@ -425,10 +437,15 @@ class XMLDocument {
             while (tag_stack.size()) {
                 read_whitespace();
                 UNREAD();
-                string content = read_string_until("<");
-                content.erase(content.find_last_not_of(WHITESPACE)+1);
-                if (content.size()) {
-                    tag_stack.back()->children.push_back(new XMLContent(content));
+                while (true) {
+                    string content = read_string_until("\n<");
+                    content.erase(content.find_last_not_of(WHITESPACE)+1);
+                    if (content.size()) {
+                        tag_stack.back()->children.push_back(new XMLContent(content));
+                    }
+                    if (c == '<') break;
+                    read_whitespace();
+                    UNREAD();
                 }
                 READ_CHAR();
                 if (c == '!') {
@@ -506,6 +523,10 @@ class XMLDocument {
             root.find(str);
         }
         
+        void expand_all() {
+            root.expand_all();
+        }
+        
         int last_parsed_line = 0;
         
         vector<EditorLine> editor_lines;
@@ -561,7 +582,9 @@ class XMLDocument {
 };
 
 const char* help_text[] = {
-    "Q -QUIT", "W -WRITE", "RET -EDIT", "ESC -BACK", "DEL -DELETE", "I -INSERT", "N -NEW TAG", "/ -FIND"};
+    "Q -QUIT", "W -WRITE", "RET -EDIT", "ESC -BACK",
+    "DEL -DELETE", "I -INSERT", "N -NEW TAG", "/ -FIND",
+    "E -EXPAND ALL"};
 
 int main(int argc, char* argv []) {
     if (argc == 1) {
@@ -729,6 +752,9 @@ int main(int argc, char* argv []) {
                     xmldoc.render();
                 }
                 
+            } else if (command == 'e') {
+                xmldoc.expand_all();
+                xmldoc.render();
             }
         }
         int command = -1;
@@ -825,11 +851,26 @@ int main(int argc, char* argv []) {
             move(cursor-top, 0);
             if (editing) printw("*");
             else printw(" ");
+            
+            int chars_fit = COLS - (2+xmldoc.editor_lines[cursor].depth*2);
+            int extra_lines = 0;
+            int overflow = line.length() - chars_fit;
+            while (overflow >= 0) {
+                overflow -= COLS;
+                extra_lines++;
+            }
+            
             move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-            printw(string(COLS - (2+xmldoc.editor_lines[cursor].depth*2), ' ').c_str());
+            printw(string(chars_fit, ' ').c_str());
+            for (int i=0; i<extra_lines; i++) {
+                printw(string(COLS, ' ').c_str());
+            }
+            
             move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
             printw(line.c_str());
             move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
+            move(cursor-top + ((select_x - chars_fit + (COLS))/COLS),
+                (2 + (xmldoc.editor_lines[cursor].depth*2) + select_x) % COLS);
             attrset(COLOR_PAIR(1));
             printw(edit_buf.c_str());
             if (error_at != -1) {
@@ -845,7 +886,8 @@ int main(int argc, char* argv []) {
                     move(LINES-1, COLS-1);
                 }
             } else if (editing) {
-                move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + edit_col);
+                move(cursor - top + ((select_x+edit_col - chars_fit + (COLS))/COLS),
+                    (2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + edit_col) % COLS);
             }
             attrset(COLOR_PAIR(0));
             
@@ -883,7 +925,13 @@ int main(int argc, char* argv []) {
                     attrset(COLOR_PAIR(4));
                 }
                 move(y, 2 + xmldoc.editor_lines[line_num].depth*2);
-                if (xmldoc.editor_lines[line_num].text.size()) {
+                int chars_fit = COLS - (2 + xmldoc.editor_lines[line_num].depth*2);
+                if (xmldoc.editor_lines[line_num].text.size() > chars_fit) {
+                    printw(xmldoc.editor_lines[line_num].text.substr(0, chars_fit-1).c_str());
+                    attrset(COLOR_PAIR(1));
+                    printw("$");
+                    attrset(COLOR_PAIR(0));
+                } else if (xmldoc.editor_lines[line_num].text.size()) {
                     printw(xmldoc.editor_lines[line_num].text.c_str());
                 } else {
                     printw(" ");
