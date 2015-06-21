@@ -74,6 +74,10 @@ class XMLNode {
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(true, depth, to_str(), this));
         }
+        
+        virtual void set(int which, string text) {
+            
+        }
 };
 
 class XMLContent : public XMLNode {
@@ -89,6 +93,11 @@ class XMLContent : public XMLNode {
             string s = to_str(0);
             replace(s.begin(), s.end(), '\n', ' ');
             lines->push_back(EditorLine(true, depth, s, this));
+        }
+        
+        virtual void set(int which, string text) {
+            assert (which == 0);
+            content = text;
         }
 };
 
@@ -322,7 +331,8 @@ class XMLDocument {
         }
 };
 
-const char* help_text[] = {"Q - QUIT", "W - WRITE", "RETURN - EDIT"};
+const char* help_text[] = {
+    "Q - QUIT", "W - WRITE", "RETURN - EDIT", "ESC - BACK", "DEL - DELETE"};
 
 int main(int argc, char* argv []) {
     if (argc == 1) {
@@ -334,7 +344,6 @@ int main(int argc, char* argv []) {
     clear();
     keypad(stdscr, TRUE);
     start_color();
-    // the black isn't true black...  but init_color didn't work
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
     init_pair(2, COLOR_WHITE,     COLOR_BLACK);
     
@@ -409,17 +418,45 @@ int main(int argc, char* argv []) {
             }
         }
         if (editing) {
+            edit_col = 0;
             edit_buf = xmldoc.editor_lines[cursor].text;
             move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
             while (editing) {
                 int c = getch();
-                if (isprint(c)) {
+                if (c == KEY_ENTER or c == 27) { // 27 == ESC, enter doesn't work but whatever
+                    xmldoc.editor_lines[cursor].text = edit_buf;
+                    xmldoc.editor_lines[cursor].node->set(0, edit_buf);
+                    editing = false;
+                } else if (c == '\x7f' or c == KEY_BACKSPACE) {
+                    if (edit_col >= 1) {
+                        edit_buf.erase(edit_col-1, 1);
+                        edit_col -= 1;
+                    } else {
+                        flash();
+                    } 
+                } else if (c == KEY_DC) { // DELETE
+                    if (edit_col < edit_buf.length()) {
+                        edit_buf.erase(edit_col, 1);
+                    } else {
+                        flash();
+                    }
+                } else if (c == KEY_LEFT) {
+                    edit_col -= 1;
+                    if (edit_col < 0) edit_col = 0;
+                } else if (c == KEY_RIGHT) {
+                    edit_col += 1;
+                    if (edit_col > edit_buf.length()) edit_col = edit_buf.length();
+                } else if (isprint(c)) {
                     edit_buf.insert(edit_col, string(1, c));
                     edit_col++;
-                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-                    printw(edit_buf.c_str());
-                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2 + edit_col);
                 }
+                move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+                attrset(COLOR_PAIR(0));
+                printw(string(COLS - (2+xmldoc.editor_lines[cursor].depth*2), ' ').c_str());
+                move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+                attrset(COLOR_PAIR(1));
+                printw(edit_buf.c_str());
+                move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2 + edit_col);
             }
         }
         
