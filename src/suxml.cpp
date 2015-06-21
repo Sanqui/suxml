@@ -44,9 +44,6 @@ class EditorLine {
         string text;
         XMLNode* node;
         
-        bool expanded = false;
-        int child_lines = 0;
-        
         EditorLine(bool selectable, int depth, string text, XMLNode* node)
             :selectable(selectable), depth(depth), text(text), node(node) {};
 };
@@ -68,10 +65,11 @@ class XMLNode {
         XMLNode() {};
         virtual ~XMLNode() {};
         
-        virtual int num_settable() { return 1; }
-        virtual void set(int which, string text) {
-        }
+        bool expanded = false; // this is internal to the editor
         
+        virtual int is_expandable() { return false; }
+        virtual int num_settable() { return 1; }
+        virtual void set(int which, string text) {}
         
         virtual vector<string> settable_parts() { return vector<string>(); }
         
@@ -85,6 +83,7 @@ class XMLNode {
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(true, depth, to_str(), this));
         }
+    private:
 };
 
 class XMLContent : public XMLNode {
@@ -143,6 +142,7 @@ class XMLTag : public XMLNode {
             }
         }
         
+        virtual int is_expandable() { return children.size() >= 1; }
         int num_settable() { return 1 + attributes.size() + 1; }
         
         vector<string> settable_parts() {
@@ -197,14 +197,14 @@ class XMLTag : public XMLNode {
         }
         
         void render_into(vector<EditorLine>* lines, int depth) {
-            int start_line = lines->size();
+            //int start_line = lines->size();
             lines->push_back(EditorLine(true, depth, get_start_str(), this));
-            if (children.size()) {
+            if (children.size() and expanded) {
                 for (auto& child : children) {
                     child->render_into(lines, depth+1);
                 }
                 lines->push_back(EditorLine(false, depth, get_end_str(), this));
-                (*lines)[start_line].child_lines = lines->size()-start_line-1;
+                //(*lines)[start_line].child_lines = lines->size()-start_line-1;
             }
         }
         
@@ -317,9 +317,9 @@ class XMLDocument {
             return root.to_str(0);
         }
         void render() {
+            //root.expanded = true;
             editor_lines.clear();
             root.render_into(&editor_lines, 0);
-            editor_lines[0].expanded = true;
             //editor_lines[0].child_lines = 0;
         }
         
@@ -443,7 +443,7 @@ int main(int argc, char* argv []) {
     int select_cursor = 0;
     int edit_col = 0;
     
-    int last_jump = 0;
+    //int last_jump = 0;
     
     xmldoc.render();
     
@@ -465,18 +465,20 @@ int main(int argc, char* argv []) {
                 }
             }
             if (command == KEY_DOWN) {
-                if (!xmldoc.editor_lines[cursor].expanded) {
+                /*if (!xmldoc.editor_lines[cursor].expanded) {
                     cursor += xmldoc.editor_lines[cursor].child_lines;
-                }
+                }*/
                 cursor++;
                 while (cursor < xmldoc.editor_lines.size()
                     && !xmldoc.editor_lines[cursor].selectable) {
                     cursor++;
                 }
             } else if (command == KEY_RIGHT) {
-                xmldoc.editor_lines[cursor].expanded = true;
+                xmldoc.editor_lines[cursor].node->expanded = true;
+                xmldoc.render();
             } else if (command == KEY_LEFT) {
-                xmldoc.editor_lines[cursor].expanded = false;
+                xmldoc.editor_lines[cursor].node->expanded = false;
+                xmldoc.render();
             } else if (command == KEY_DC) { // DELETE
                 // TODO
                 xmldoc.render();
@@ -609,15 +611,16 @@ int main(int argc, char* argv []) {
         while (cursor < top+(LINES/3)) top--;
         if (top < 0) top = 0;
         while (cursor > top+(LINES/3)*2) {
-            if (!xmldoc.editor_lines[top].expanded) {
+            /*if (!xmldoc.editor_lines[top].expanded) {
                 top += xmldoc.editor_lines[top].child_lines;
-            }
+            }*/
             top++;
         }
         
         clear();
-        int line_num = top;
+        //int line_num = top;
         for (int y=0; y<LINES-1; y++) {
+            int line_num = top+y;
             if (line_num < xmldoc.editor_lines.size()) {
                 if (line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted) {
                     //move(y, 1 + xmldoc.editor_lines[y].depth*2);
@@ -632,16 +635,17 @@ int main(int argc, char* argv []) {
                 }
                 attrset(COLOR_PAIR(0));
                 
-                if (!xmldoc.editor_lines[line_num].expanded && xmldoc.editor_lines[line_num].child_lines >= 1) {
-                    move(y, xmldoc.editor_lines[line_num].depth*2);
-                    printw(" +");
-                    line_num += xmldoc.editor_lines[line_num].child_lines;
+                if (!xmldoc.editor_lines[line_num].node->expanded
+                    && xmldoc.editor_lines[line_num].node->is_expandable()) {
+                    move(y, 1+xmldoc.editor_lines[line_num].depth*2);
+                    attrset(COLOR_PAIR(1));
+                    printw("+");
+                    attrset(COLOR_PAIR(0));
                 }
             } else {
                 move(y, 0);
                 //printw("~");
             }
-            line_num++;
         }
         move(LINES-1, 0);
         printw("  ");
