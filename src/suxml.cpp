@@ -70,6 +70,8 @@ class XMLNode {
         virtual int is_expandable() { return false; }
         virtual int num_settable() { return 1; }
         virtual bool set(int which, string text) { return true; }
+        virtual bool del(int which) { return false; }
+        virtual bool del_node(XMLNode* node) { return false; }
         
         virtual vector<string> settable_parts() { return vector<string>(); }
         
@@ -94,6 +96,12 @@ class XMLContent : public XMLNode {
         bool set(int which, string text) {
             assert (which == 0);
             content = text;
+            return true;
+        }
+        
+        bool del(int which) {
+            assert (which == 0);
+            content = "";
             return true;
         }
         
@@ -147,6 +155,34 @@ class XMLTag : public XMLNode {
                 attributes.push_back(XMLAttribute(text, ""));
             }
             return true;
+        }
+        
+        bool del(int which) {
+            which--;
+            if (which == -1) return false;
+            if (which/2 < attributes.size()) {
+                if (which % 2 == 0) {
+                    attributes.erase(attributes.begin() + which/2);
+                } else {
+                    attributes[which/2].value = "";
+                }
+                return true;
+            }
+            return false;
+        }
+        
+        bool del_node(XMLNode* node) {
+            int i = 0;
+            for (auto i_node : children) {
+                if (node == &*i_node) {
+                    children.erase(children.begin() + i);
+                    return true;
+                } else if (i_node->del_node(node)) {
+                    return true;
+                }
+                i++;
+            }
+            return false;
         }
         
         virtual int is_expandable() { return children.size() >= 1; }
@@ -327,6 +363,11 @@ class XMLDocument {
             return true;
         }
         
+        bool del_node(XMLNode* node) {
+            if (node == &root) return false;
+            return root.del_node(node);
+        }
+        
         string to_str() const {
             return root.to_str(0);
         }
@@ -495,7 +536,7 @@ int main(int argc, char* argv []) {
                 xmldoc.editor_lines[cursor].node->expanded = false;
                 xmldoc.render();
             } else if (command == KEY_DC) { // DELETE
-                // TODO
+                xmldoc.del_node(xmldoc.editor_lines[cursor].node);
                 xmldoc.render();
             }
         }
@@ -525,6 +566,9 @@ int main(int argc, char* argv []) {
                         if (select_cursor >= xmldoc.editor_lines[cursor].node->num_settable()) {
                             select_cursor = xmldoc.editor_lines[cursor].node->num_settable()-1;
                         }
+                    } else if (command == KEY_DC) { // DELETE
+                        bool del = xmldoc.editor_lines[cursor].node->del(select_cursor);
+                        if (del) xmldoc.render();
                     }
                     
                     //edit_buf = xmldoc.editor_lines[cursor].text;
