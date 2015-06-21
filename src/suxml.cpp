@@ -91,6 +91,12 @@ class XMLContent : public XMLNode {
             return content;
         }
         
+        vector<string> settable_parts() {
+            vector<string> parts = vector<string>();
+            parts.push_back(content);
+            return parts;
+        }
+        
         void render_into(vector<EditorLine>* lines, int depth) {
             string s = to_str(0);
             replace(s.begin(), s.end(), '\n', ' ');
@@ -358,6 +364,7 @@ int main(int argc, char* argv []) {
     initscr();
     clear();
     keypad(stdscr, TRUE);
+    ESCDELAY = 25;
     start_color();
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
     init_pair(2, COLOR_WHITE,     COLOR_BLACK);
@@ -417,6 +424,7 @@ int main(int argc, char* argv []) {
             if (command == 'q') break;
             if (command == '\n') {
                 select = true;
+                select_cursor = 0;
             }
             if (command == KEY_UP) {
                 cursor--;
@@ -435,14 +443,13 @@ int main(int argc, char* argv []) {
                 redraw = true;
             }
         }
-        if (select) {
-            if (xmldoc.editor_lines[cursor].node->num_settable() > 1) {
-                // selecting...
-                select_cursor = 0;
-                bool first = true;
-                int command = -1;
-                while (select) {
-                    if (!first) command = getch();
+        int command = -1;
+        //if (select || edit) {
+        while (select || editing) {
+            if (select) {
+                if (xmldoc.editor_lines[cursor].node->num_settable() > 1) {
+                    // selecting...
+                    command = getch();
                     if (command == 27) { // esc
                         select = false;
                     }
@@ -456,44 +463,20 @@ int main(int argc, char* argv []) {
                         }
                     }
                     
-                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-                    attrset(COLOR_PAIR(0));
-                    printw(string(COLS - (2+xmldoc.editor_lines[cursor].depth*2), ' ').c_str());
-                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-                    int i = 0;
-                    string line = "";
-                    int select_x = 0;
-                    string select_part = "";
-                    for (string part : xmldoc.editor_lines[cursor].node->settable_parts()) {
-                        if (i == 0) line += "<";
-                        else if (i % 2 == 0) line += "=\"";
-                        else line += " ";
-                        if (i == select_cursor) {
-                            select_x = line.length();
-                            select_part = part;
-                        }
-                        line += part.c_str();
-                        if (i != 0 && i % 2 == 0) line += "\"";
-                        i++;
-                    }
-                    line += ">";
-                    printw(line.c_str());
-                    move(cursor-top, 2+(xmldoc.editor_lines[cursor].depth*2) + select_x);
-                    attrset(COLOR_PAIR(1));
-                    printw(select_part.c_str());
-                    move(LINES-1, COLS-1);
-                    first = false;
+                    //edit_buf = xmldoc.editor_lines[cursor].text;
+                    edit_buf = xmldoc.editor_lines[cursor].node->settable_parts()[select_cursor];
+                    
+                } else {
+                    select = false;
+                    editing = true;
+                    edit_col = 0;
+                    edit_buf = xmldoc.editor_lines[cursor].text;
                 }
-            } else {
-                select = false;
-                editing = true;
             }
-        }
-        if (editing) {
-            edit_col = 0;
-            edit_buf = xmldoc.editor_lines[cursor].text;
-            move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-            while (editing) {
+            if (editing) {
+                //edit_col = 0;
+                //edit_buf = xmldoc.editor_lines[cursor].text;
+                //move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
                 int c = getch();
                 if (c == KEY_ENTER or c == 27) { // 27 == ESC, enter doesn't work but whatever
                     xmldoc.editor_lines[cursor].text = edit_buf;
@@ -522,14 +505,47 @@ int main(int argc, char* argv []) {
                     edit_buf.insert(edit_col, string(1, c));
                     edit_col++;
                 }
-                move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-                attrset(COLOR_PAIR(0));
-                printw(string(COLS - (2+xmldoc.editor_lines[cursor].depth*2), ' ').c_str());
-                move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
-                attrset(COLOR_PAIR(1));
-                printw(edit_buf.c_str());
-                move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2 + edit_col);
             }
+            // render line while selecting or editing
+            int i = 0;
+            string line = "";
+            int select_x = 0;
+            string select_part = "";
+            if (xmldoc.editor_lines[cursor].node->num_settable() > 1) {
+                for (string part : xmldoc.editor_lines[cursor].node->settable_parts()) {
+                    if (i == 0) line += "<";
+                    else if (i % 2 == 0) line += "=\"";
+                    else line += " ";
+                    if (i == select_cursor) {
+                        select_x = line.length();
+                        line += edit_buf;
+                        //select_part = part;
+                    } else {
+                        line += part;
+                    }
+                    if (i != 0 && i % 2 == 0) line += "\"";
+                    i++;
+                }
+                line += ">";
+            } else {
+                //line = xmldoc.editor_lines[cursor].node->settable_parts()[0];
+                line = edit_buf;
+            }
+            
+            move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+            attrset(COLOR_PAIR(0));
+            printw(string(COLS - (2+xmldoc.editor_lines[cursor].depth*2), ' ').c_str());
+            move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+            printw(line.c_str());
+            move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
+            attrset(COLOR_PAIR(1));
+            printw(edit_buf.c_str());
+            if (select) {
+                move(LINES-1, COLS-1);
+            } else if (editing) {
+                move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + edit_col);
+            }
+            
         }
         
         highlighted = xmldoc.editor_lines[cursor].node;
