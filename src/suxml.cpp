@@ -378,12 +378,19 @@ int main(int argc, char* argv []) {
     
     int top = 0;
     int cursor = 0;
+    bool editing = false;
     bool redraw = true;
+    XMLNode* highlighted;
+    string edit_buf;
+    int edit_col = 0;
     
     while (true) {
         if (!redraw) {
             int command = getch();
             if (command == 'q') break;
+            if (command == '\n') {
+                editing = true;
+            }
             if (command == KEY_UP) {
                 cursor--;
                 while (cursor >= 0
@@ -401,6 +408,23 @@ int main(int argc, char* argv []) {
                 redraw = true;
             }
         }
+        if (editing) {
+            edit_buf = xmldoc.editor_lines[cursor].text;
+            move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+            while (editing) {
+                int c = getch();
+                if (isprint(c)) {
+                    edit_buf.insert(edit_col, string(1, c));
+                    edit_col++;
+                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+                    printw(edit_buf.c_str());
+                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2 + edit_col);
+                }
+            }
+        }
+        
+        highlighted = xmldoc.editor_lines[cursor].node;
+        
         if (cursor < 0) cursor = 0;
         if (cursor >= xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
         
@@ -412,7 +436,7 @@ int main(int argc, char* argv []) {
         for (int y=0; y<LINES-1; y++) {
             int line_num = top+y;
             if (line_num < xmldoc.editor_lines.size()) {
-                if (line_num == cursor) {
+                if (line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted) {
                     //move(y, 1 + xmldoc.editor_lines[y].depth*2);
                     //printw("▶");
                     attrset(COLOR_PAIR(1));
