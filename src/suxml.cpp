@@ -64,10 +64,11 @@ class XMLNode {
     public:
         XMLNode() {};
         virtual ~XMLNode() {};
-        bool has_attributes = false;
         
         virtual int num_settable() { return 1; }
-        virtual void set(int which, string text) {}
+        virtual void set(int which, string text) {
+        }
+        
         
         virtual vector<string> settable_parts() { return vector<string>(); }
         
@@ -77,6 +78,7 @@ class XMLNode {
         string to_str() const {
             return to_str(0);
         }
+        virtual string get_start_str() const { return to_str(); }
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(true, depth, to_str(), this));
         }
@@ -86,6 +88,11 @@ class XMLContent : public XMLNode {
     public:
         XMLContent(string content) : XMLNode(), content(content) {};
         string content;
+        
+        void set(int which, string text) {
+            assert (which == 0);
+            content = text;
+        }
         
         string to_str(int depth) const {
             return content;
@@ -102,11 +109,6 @@ class XMLContent : public XMLNode {
             replace(s.begin(), s.end(), '\n', ' ');
             lines->push_back(EditorLine(true, depth, s, this));
         }
-        
-        virtual void set(int which, string text) {
-            assert (which == 0);
-            content = text;
-        }
 };
 
 class XMLTag : public XMLNode {
@@ -122,6 +124,21 @@ class XMLTag : public XMLNode {
         string element;
         vector<XMLAttribute> attributes;
         vector<XMLNode*> children;
+        
+        void set(int which, string text) {
+            if (which == 0) {
+                element = text;
+            }
+            else {
+                int i = 1;
+                for (XMLAttribute& attr : attributes) {
+                    if (i == which) attr.attribute = text;
+                    i++;
+                    if (i == which) attr.value = text;
+                    i++;
+                }
+            }
+        }
         
         int num_settable() { return 1 + attributes.size() + 1; }
         
@@ -295,6 +312,7 @@ class XMLDocument {
             return root.to_str(0);
         }
         void render() {
+            editor_lines.clear();
             root.render_into(&editor_lines, 0);
         }
         
@@ -423,8 +441,10 @@ int main(int argc, char* argv []) {
             int command = getch();
             if (command == 'q') break;
             if (command == '\n') {
-                select = true;
-                select_cursor = 0;
+                if (xmldoc.editor_lines[cursor].selectable) {
+                    select = true;
+                    select_cursor = 0;
+                }
             }
             if (command == KEY_UP) {
                 cursor--;
@@ -452,8 +472,12 @@ int main(int argc, char* argv []) {
                     command = getch();
                     if (command == 27) { // esc
                         select = false;
-                    }
-                    if (command == KEY_LEFT) {
+                    } else if (command == '\n') {
+                        select = false;
+                        editing = true;
+                        edit_col = select_cursor;
+                        //edit_buf = x
+                    } else if (command == KEY_LEFT) {
                         select_cursor--;
                         if (select_cursor < 0) select_cursor = 0;
                     } else if (command == KEY_RIGHT) {
@@ -478,9 +502,10 @@ int main(int argc, char* argv []) {
                 //edit_buf = xmldoc.editor_lines[cursor].text;
                 //move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
                 int c = getch();
-                if (c == KEY_ENTER or c == 27) { // 27 == ESC, enter doesn't work but whatever
-                    xmldoc.editor_lines[cursor].text = edit_buf;
-                    xmldoc.editor_lines[cursor].node->set(0, edit_buf);
+                if (c == '\n' or c == 27) { // 27 == ESC
+                    //xmldoc.editor_lines[cursor].text = xmldoc.editor_lines[cursor].node->to_start_str();
+                    xmldoc.editor_lines[cursor].node->set(select_cursor, edit_buf);
+                    xmldoc.render();
                     editing = false;
                 } else if (c == '\x7f' or c == KEY_BACKSPACE) {
                     if (edit_col >= 1) {
