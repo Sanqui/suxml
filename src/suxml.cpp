@@ -64,6 +64,12 @@ class XMLNode {
     public:
         XMLNode() {};
         virtual ~XMLNode() {};
+        bool has_attributes = false;
+        
+        virtual int num_settable() { return 1; }
+        virtual void set(int which, string text) {}
+        
+        virtual vector<string> settable_parts() { return vector<string>(); }
         
         virtual string to_str(int depth) const {
             return "";
@@ -73,10 +79,6 @@ class XMLNode {
         }
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(true, depth, to_str(), this));
-        }
-        
-        virtual void set(int which, string text) {
-            
         }
 };
 
@@ -114,6 +116,19 @@ class XMLTag : public XMLNode {
         string element;
         vector<XMLAttribute> attributes;
         vector<XMLNode*> children;
+        
+        int num_settable() { return 1 + attributes.size() + 1; }
+        
+        vector<string> settable_parts() {
+            vector<string> parts = vector<string>();
+            parts.push_back(element);
+            for (XMLAttribute attr : attributes) {
+                parts.push_back(attr.attribute);
+                parts.push_back(attr.value);
+            }
+            parts.push_back(" "); // dummy new attribute
+            return parts;
+        }
         
         string get_start_str() const {
             string out = "<";
@@ -381,16 +396,19 @@ int main(int argc, char* argv []) {
     //getch();
     clear();
     
+    //if (xmldoc.root.has_attributes) return 0;
     //DEBUG("The root element is: %s with %d children\n", xmldoc.root.element.c_str(), xmldoc.root.children.size());
     //cout << xmldoc.to_str();
     //cout << "\n";
     
     int top = 0;
     int cursor = 0;
+    bool select = false;
     bool editing = false;
     bool redraw = true;
     XMLNode* highlighted;
     string edit_buf;
+    int select_cursor = 0;
     int edit_col = 0;
     
     while (true) {
@@ -398,7 +416,7 @@ int main(int argc, char* argv []) {
             int command = getch();
             if (command == 'q') break;
             if (command == '\n') {
-                editing = true;
+                select = true;
             }
             if (command == KEY_UP) {
                 cursor--;
@@ -415,6 +433,60 @@ int main(int argc, char* argv []) {
                     cursor++;
                 }
                 redraw = true;
+            }
+        }
+        if (select) {
+            if (xmldoc.editor_lines[cursor].node->num_settable() > 1) {
+                // selecting...
+                select_cursor = 0;
+                bool first = true;
+                int command = -1;
+                while (select) {
+                    if (!first) command = getch();
+                    if (command == 27) { // esc
+                        select = false;
+                    }
+                    if (command == KEY_LEFT) {
+                        select_cursor--;
+                        if (select_cursor < 0) select_cursor = 0;
+                    } else if (command == KEY_RIGHT) {
+                        select_cursor++;
+                        if (select_cursor > xmldoc.editor_lines[cursor].node->num_settable()) {
+                            select_cursor = xmldoc.editor_lines[cursor].node->num_settable();
+                        }
+                    }
+                    
+                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+                    attrset(COLOR_PAIR(0));
+                    printw(string(COLS - (2+xmldoc.editor_lines[cursor].depth*2), ' ').c_str());
+                    move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
+                    int i = 0;
+                    string line = "";
+                    int select_x = 0;
+                    string select_part = "";
+                    for (string part : xmldoc.editor_lines[cursor].node->settable_parts()) {
+                        if (i == 0) line += "<";
+                        else if (i % 2 == 0) line += "=\"";
+                        else line += " ";
+                        if (i == select_cursor) {
+                            select_x = line.length();
+                            select_part = part;
+                        }
+                        line += part.c_str();
+                        if (i != 0 && i % 2 == 0) line += "\"";
+                        i++;
+                    }
+                    line += ">";
+                    printw(line.c_str());
+                    move(cursor-top, 2+(xmldoc.editor_lines[cursor].depth*2) + select_x);
+                    attrset(COLOR_PAIR(1));
+                    printw(select_part.c_str());
+                    move(LINES-1, COLS-1);
+                    first = false;
+                }
+            } else {
+                select = false;
+                editing = true;
             }
         }
         if (editing) {
