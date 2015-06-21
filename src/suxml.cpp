@@ -643,8 +643,16 @@ int main(int argc, char* argv []) {
                     xmldoc.render();
                 }
             } else if (command == 'i') {
+                xmldoc.editor_lines[cursor].node->expanded = true;
                 if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
                   !xmldoc.editor_lines[cursor].selectable, new XMLContent(""))) {
+                    cursor++;
+                    xmldoc.render();
+                }
+            } else if (command == 'n') {
+                xmldoc.editor_lines[cursor].node->expanded = true;
+                if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
+                  !xmldoc.editor_lines[cursor].selectable, new XMLTag(""))) {
                     cursor++;
                     xmldoc.render();
                 }
