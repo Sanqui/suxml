@@ -78,6 +78,7 @@ class XMLNode {
         virtual int num_settable() { return 1; }
         virtual pair<bool, int> set(int which, string text) { return make_pair(true, -1); }
         virtual bool del(int which) { return false; }
+        virtual bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) { return false; }
         virtual bool del_node(XMLNode* node) { return false; }
         
         virtual vector<string> settable_parts() { return vector<string>(); }
@@ -200,6 +201,29 @@ class XMLTag : public XMLNode {
                     children.erase(children.begin() + i);
                     return true;
                 } else if (i_node->del_node(node)) {
+                    return true;
+                }
+                i++;
+            }
+            return false;
+        }
+        bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
+            if (node == this && !force_after) {
+                children.insert(children.begin(), new_node);
+                return true;
+            }
+            int i = 0;
+            for (auto i_node : children) {
+                if (node == &*i_node) {
+                    bool inserted = false;
+                    if (!force_after) {
+                        inserted = i_node->ins_node(node, force_after, new_node);
+                    }
+                    if (!inserted) {
+                        children.insert(children.begin()+i+1, new_node);
+                    }
+                    return true;
+                } else if (i_node->ins_node(node, force_after, new_node)) {
                     return true;
                 }
                 i++;
@@ -433,6 +457,11 @@ class XMLDocument {
             return root.del_node(node);
         }
         
+        bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
+            if (node == &root) return false;
+            return root.ins_node(node, force_after, new_node);
+        }
+        
         string to_str() const {
             return root.to_str(0);
         }
@@ -498,7 +527,7 @@ class XMLDocument {
 };
 
 const char* help_text[] = {
-    "Q - QUIT", "W - WRITE", "RETURN - EDIT", "ESC - BACK", "DEL - DELETE", "I - INSERT"};
+    "Q - QUIT", "W - WRITE", "RETURN - EDIT", "ESC - BACK", "DEL - DELETE", "I - INSERT", "N - NEW TAG"};
 
 int main(int argc, char* argv []) {
     if (argc == 1) {
@@ -583,21 +612,18 @@ int main(int argc, char* argv []) {
                 fout << xmldoc.to_str();
                 fout.close();
                 highlight_help_text = 1;
-            }
-            if (command == '\n') {
+            } else if (command == '\n') {
                 if (xmldoc.editor_lines[cursor].selectable) {
                     select = true;
                     select_cursor = 0;
                 }
-            }
-            if (command == KEY_UP) {
+            } else if (command == KEY_UP) {
                 cursor--;
                 /*while (cursor >= 0
                     && !xmldoc.editor_lines[cursor].selectable) {
                     cursor--;
                 }*/
-            }
-            if (command == KEY_DOWN) {
+            } else if (command == KEY_DOWN) {
                 /*if (!xmldoc.editor_lines[cursor].expanded) {
                     cursor += xmldoc.editor_lines[cursor].child_lines;
                 }*/
@@ -613,8 +639,15 @@ int main(int argc, char* argv []) {
                 xmldoc.editor_lines[cursor].node->expanded = false;
                 xmldoc.render();
             } else if (command == KEY_DC) { // DELETE
-                xmldoc.del_node(xmldoc.editor_lines[cursor].node);
-                xmldoc.render();
+                if (xmldoc.del_node(xmldoc.editor_lines[cursor].node)) {
+                    xmldoc.render();
+                }
+            } else if (command == 'i') {
+                if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
+                  !xmldoc.editor_lines[cursor].selectable, new XMLContent(""))) {
+                    cursor++;
+                    xmldoc.render();
+                }
             }
         }
         int command = -1;
@@ -791,11 +824,14 @@ int main(int argc, char* argv []) {
         printw("  ");
         int i = 0;
         for (auto text : help_text) {
-            printw(" ");
+            //printw(" ");
             attrset(COLOR_PAIR(1));
             if (highlight_help_text == i) attrset(COLOR_PAIR(3));
             printw(" ");
-            printw(text);
+            for (auto c : string(text)) {
+                if (c != '-') printw(string(1, c).c_str());
+                else attrset(COLOR_PAIR(0));
+            }
             printw(" ");
             attrset(COLOR_PAIR(0));
             printw(" ");
