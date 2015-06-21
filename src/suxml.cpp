@@ -81,6 +81,11 @@ class XMLNode {
         string to_str() const {
             return to_str(0);
         }
+        
+        virtual pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
+            return make_pair(edit_buf, 0);
+        }
+        
         virtual string get_start_str() const { return to_str(); }
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(true, depth, to_str(), this));
@@ -258,6 +263,28 @@ class XMLTag : public XMLNode {
             }
         }
         
+        pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
+            int i=0;
+            int select_x = 0;
+            string line = "";
+            for (string part : settable_parts()) {
+                if (i == 0) line += "<";
+                else if (i % 2 == 0) line += "=\"";
+                else line += " ";
+                if (i == select_cursor) {
+                    select_x = line.length();
+                    line += edit_buf;
+                    //select_part = part;
+                } else {
+                    line += part;
+                }
+                if (i != 0 && i % 2 == 0) line += "\"";
+                i++;
+            }
+            line += ">";
+            return make_pair(line, select_x);
+        }
+        
 };
 
 class XMLDeclaration : public XMLTag {
@@ -274,6 +301,22 @@ class XMLComment : public XMLNode {
         XMLComment(string comment) : XMLNode(), comment(comment) {};
         
         string comment;
+        
+        bool set(int which, string text) {
+            assert (which == 0);
+            comment = text;
+            return true;
+        }
+        
+        vector<string> settable_parts() {
+            vector<string> parts = vector<string>();
+            parts.push_back(comment);
+            return parts;
+        }
+        pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
+            return make_pair("<!--"+edit_buf+"-->", 4);
+        }
+        
         string to_str(int depth) const {
             return "<!--"+comment+"-->";
         }
@@ -620,30 +663,13 @@ int main(int argc, char* argv []) {
                 }
             }
             // render line while selecting or editing
-            int i = 0;
-            string line = "";
-            int select_x = 0;
-            string select_part = "";
-            if (xmldoc.editor_lines[cursor].node->num_settable() > 1) {
-                for (string part : xmldoc.editor_lines[cursor].node->settable_parts()) {
-                    if (i == 0) line += "<";
-                    else if (i % 2 == 0) line += "=\"";
-                    else line += " ";
-                    if (i == select_cursor) {
-                        select_x = line.length();
-                        line += edit_buf;
-                        //select_part = part;
-                    } else {
-                        line += part;
-                    }
-                    if (i != 0 && i % 2 == 0) line += "\"";
-                    i++;
-                }
-                line += ">";
-            } else {
-                //line = xmldoc.editor_lines[cursor].node->settable_parts()[0];
-                line = edit_buf;
-            }
+            //string line = "";
+            //int select_x = 0;
+            //string select_part = "";
+            auto line_and_select_x = xmldoc.editor_lines[cursor].node->get_settable_line(select_cursor, edit_buf);
+            string line = line_and_select_x.first;
+            int select_x = line_and_select_x.second;
+            
             attrset(COLOR_PAIR(0));
             move(cursor-top, 0);
             if (editing) printw("*");
