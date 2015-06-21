@@ -1,0 +1,16 @@
+Zobrazovač XML: editor v ncurses, který zobrazí XML jako strom. Každý uzel stromu je možné expandovat a zobrazovat tak jen určitou část stromu. Je možné přidávat/odebírat elementy a jejich atributy. Editor nepodporuje namespaces. XML je reprezentováno v paměti jako hierarchie tříd. V editoru je možné filtrovat uzly XML podle zadaného patternu. Např. všechny uzly které se vyskytují jako poduzel uzlu se jménem X. XML není třeba parsovat přesně podle normy, vyberte si takovou podmnožinu, ktera vam vyhovuje. Speciální znaky (entity) neuvažujte. Příklad jednoduchého XML je následující:
+
+<bookstore>
+<book category="CHILDREN">
+<title>Harry Potter</title>
+<author>J K. Rowling</author>
+<year>2005</year>
+<price>29.99</price>
+</book>
+<book category="WEB">
+<title>Learning XML</title>
+<author>Erik T. Ray</author>
+<year>2003</year>
+<price>39.95</price>
+</book>
+</bookstore>
