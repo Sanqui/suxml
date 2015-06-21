@@ -35,6 +35,13 @@ bool is_whitespace(string s) {
     return true;
 }
 
+int any_char_in_string(string s, string chars) {
+    for (char c : chars) {
+        if (s.find(c) != -1) return s.find(c);
+    }
+    return -1;
+}
+
 class XMLNode;
 
 class EditorLine {
@@ -69,7 +76,7 @@ class XMLNode {
         
         virtual int is_expandable() { return false; }
         virtual int num_settable() { return 1; }
-        virtual bool set(int which, string text) { return true; }
+        virtual pair<bool, int> set(int which, string text) { return make_pair(true, -1); }
         virtual bool del(int which) { return false; }
         virtual bool del_node(XMLNode* node) { return false; }
         
@@ -98,10 +105,12 @@ class XMLContent : public XMLNode {
         XMLContent(string content) : XMLNode(), content(content) {};
         string content;
         
-        bool set(int which, string text) {
+        pair<bool, int> set(int which, string text) {
             assert (which == 0);
+            int invalid = any_char_in_string(text, "<");
+            if (invalid != -1) return make_pair(false, invalid);
             content = text;
-            return true;
+            return make_pair(true, -1);
         }
         
         bool del(int which) {
@@ -141,25 +150,33 @@ class XMLTag : public XMLNode {
         vector<XMLAttribute> attributes;
         vector<XMLNode*> children;
         
-        bool set(int which, string text) {
+        pair<bool, int> set(int which, string text) {
             which--;
             if (which == -1) {
-                if (text.size() == 0) return false;
+                if (text.size() == 0) return make_pair(false, -1);
+                int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">");
+                if (invalid != -1) return make_pair(false, invalid);
                 element = text;
             }
             else if (which/2 < attributes.size()) {
                 if (which % 2 == 0) {
-                    if (text.size() == 0) return false;
+                    if (text.size() == 0) return make_pair(false, -1);
+                    int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">");
+                    if (invalid != -1) return make_pair(false, invalid);
                     attributes[which/2].attribute = text;
                 }
                 else {
+                    int invalid = any_char_in_string(text, "\"");
+                    if (invalid != -1) return make_pair(false, invalid);
                     attributes[which/2].value = text;
                 }
             } else {
-                if (text.size() == 0) return true;
+                if (text.size() == 0) return make_pair(true, -1);
+                int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">");
+                if (invalid != -1) return make_pair(false, invalid);
                 attributes.push_back(XMLAttribute(text, ""));
             }
-            return true;
+            return make_pair(true, -1);
         }
         
         bool del(int which) {
@@ -281,6 +298,7 @@ class XMLTag : public XMLNode {
                 if (i != 0 && i % 2 == 0) line += "\"";
                 i++;
             }
+            if (children.size() == 0) line += "/";
             line += ">";
             return make_pair(line, select_x);
         }
@@ -302,10 +320,10 @@ class XMLComment : public XMLNode {
         
         string comment;
         
-        bool set(int which, string text) {
+        pair<bool, int> set(int which, string text) {
             assert (which == 0);
             comment = text;
-            return true;
+            return make_pair(true, -1);
         }
         
         vector<string> settable_parts() {
@@ -353,7 +371,10 @@ class XMLDocument {
             while (tag_stack.size()) {
                 read_whitespace();
                 UNREAD();
-                tag_stack.back()->children.push_back(new XMLContent(read_string_until("<")));
+                string content = read_string_until("<");
+                if (content.size()) {
+                    tag_stack.back()->children.push_back(new XMLContent(content));
+                }
                 READ_CHAR();
                 if (c == '!') {
                     for (int i=0; i < 2; i++) {
@@ -490,7 +511,7 @@ int main(int argc, char* argv []) {
     ESCDELAY = 25;
     start_color();
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
-    init_pair(2, COLOR_WHITE,     COLOR_BLACK);
+    init_pair(2, COLOR_BLACK,     COLOR_RED);
     
     attrset(COLOR_PAIR(0));
     
@@ -558,20 +579,20 @@ int main(int argc, char* argv []) {
             }
             if (command == KEY_UP) {
                 cursor--;
-                while (cursor >= 0
+                /*while (cursor >= 0
                     && !xmldoc.editor_lines[cursor].selectable) {
                     cursor--;
-                }
+                }*/
             }
             if (command == KEY_DOWN) {
                 /*if (!xmldoc.editor_lines[cursor].expanded) {
                     cursor += xmldoc.editor_lines[cursor].child_lines;
                 }*/
                 cursor++;
-                while (cursor < xmldoc.editor_lines.size()
+                /*while (cursor < xmldoc.editor_lines.size()
                     && !xmldoc.editor_lines[cursor].selectable) {
                     cursor++;
-                }
+                }*/
             } else if (command == KEY_RIGHT) {
                 xmldoc.editor_lines[cursor].node->expanded = true;
                 xmldoc.render();
@@ -585,6 +606,7 @@ int main(int argc, char* argv []) {
         }
         int command = -1;
         bool skip=true;
+        int error_at = -1;
         //if (select || edit) {
         while (select || editing) {
             if (select) {
@@ -632,11 +654,13 @@ int main(int argc, char* argv []) {
                 if (!skip) c = getch();
                 if (c == '\n' or c == 27) { // 27 == ESC
                     //xmldoc.editor_lines[cursor].text = xmldoc.editor_lines[cursor].node->to_start_str();
-                    bool set = xmldoc.editor_lines[cursor].node->set(select_cursor, edit_buf);
-                    if (set) {
+                    pair<bool, int> set = xmldoc.editor_lines[cursor].node->set(select_cursor, edit_buf);
+                    if (set.first) {
                         xmldoc.render();
                         editing = false;
                         if (xmldoc.editor_lines[cursor].node->num_settable() > 1) select = true;
+                    } else {
+                        error_at = set.second;
                     }
                 } else if (c == '\x7f' or c == KEY_BACKSPACE) {
                     if (edit_col >= 1) {
@@ -681,6 +705,12 @@ int main(int argc, char* argv []) {
             move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
             attrset(COLOR_PAIR(1));
             printw(edit_buf.c_str());
+            if (error_at != -1) {
+                attrset(COLOR_PAIR(2));
+                move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + error_at);
+                printw(string(1, edit_buf[error_at]).c_str());
+                error_at = -1;
+            }
             if (select) {
                 if (edit_buf.length() == 0) {
                     move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
@@ -714,7 +744,8 @@ int main(int argc, char* argv []) {
         for (int y=0; y<LINES-1; y++) {
             int line_num = top+y;
             if (line_num < xmldoc.editor_lines.size()) {
-                if (line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted) {
+                if ((line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted)
+                    && xmldoc.editor_lines[cursor].selectable) {
                     //move(y, 1 + xmldoc.editor_lines[y].depth*2);
                     //printw("▶");
                     attrset(COLOR_PAIR(1));
@@ -723,6 +754,10 @@ int main(int argc, char* argv []) {
                 if (xmldoc.editor_lines[line_num].text.size()) {
                     printw(xmldoc.editor_lines[line_num].text.c_str());
                 } else {
+                    printw(" ");
+                }
+                if (line_num == cursor && !xmldoc.editor_lines[cursor].selectable) {
+                    attrset(COLOR_PAIR(1));
                     printw(" ");
                 }
                 attrset(COLOR_PAIR(0));
