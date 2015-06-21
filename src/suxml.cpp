@@ -69,7 +69,7 @@ class XMLNode {
         
         virtual int is_expandable() { return false; }
         virtual int num_settable() { return 1; }
-        virtual void set(int which, string text) {}
+        virtual bool set(int which, string text) { return true; }
         
         virtual vector<string> settable_parts() { return vector<string>(); }
         
@@ -91,9 +91,10 @@ class XMLContent : public XMLNode {
         XMLContent(string content) : XMLNode(), content(content) {};
         string content;
         
-        void set(int which, string text) {
+        bool set(int which, string text) {
             assert (which == 0);
             content = text;
+            return true;
         }
         
         string to_str(int depth) const {
@@ -127,23 +128,32 @@ class XMLTag : public XMLNode {
         vector<XMLAttribute> attributes;
         vector<XMLNode*> children;
         
-        void set(int which, string text) {
-            if (which == 0) {
+        bool set(int which, string text) {
+            which--;
+            if (which == -1) {
+                if (text.size() == 0) return false;
                 element = text;
             }
-            else {
-                int i = 1;
-                for (XMLAttribute& attr : attributes) {
-                    if (i == which) attr.attribute = text;
-                    i++;
-                    if (i == which) attr.value = text;
-                    i++;
+            else if (which/2 < attributes.size()) {
+                if (which % 2 == 0) {
+                    if (text.size() == 0) return false;
+                    attributes[which/2].attribute = text;
                 }
+                else {
+                    attributes[which/2].value = text;
+                }
+            } else {
+                if (text.size() == 0) return true;
+                attributes.push_back(XMLAttribute(text, ""));
             }
+            return true;
         }
         
         virtual int is_expandable() { return children.size() >= 1; }
-        int num_settable() { return 1 + attributes.size() + 1; }
+        int num_settable() {
+            //return settable_parts().size();
+            return 1 + (attributes.size()*2) + 1;
+        }
         
         vector<string> settable_parts() {
             vector<string> parts = vector<string>();
@@ -152,7 +162,7 @@ class XMLTag : public XMLNode {
                 parts.push_back(attr.attribute);
                 parts.push_back(attr.value);
             }
-            parts.push_back(" "); // dummy new attribute
+            parts.push_back(""); // dummy new attribute
             return parts;
         }
         
@@ -198,13 +208,17 @@ class XMLTag : public XMLNode {
         
         void render_into(vector<EditorLine>* lines, int depth) {
             //int start_line = lines->size();
-            lines->push_back(EditorLine(true, depth, get_start_str(), this));
             if (children.size() and expanded) {
+                lines->push_back(EditorLine(true, depth, get_start_str(), this));
                 for (auto& child : children) {
                     child->render_into(lines, depth+1);
                 }
                 lines->push_back(EditorLine(false, depth, get_end_str(), this));
                 //(*lines)[start_line].child_lines = lines->size()-start_line-1;
+            } else if (children.size()) {
+                lines->push_back(EditorLine(true, depth, get_start_str()+" ...", this));
+            } else {
+                lines->push_back(EditorLine(true, depth, get_start_str(), this));
             }
         }
         
@@ -445,6 +459,7 @@ int main(int argc, char* argv []) {
     
     //int last_jump = 0;
     
+    xmldoc.root.expanded = true;
     xmldoc.render();
     
     while (true) {
@@ -497,6 +512,7 @@ int main(int argc, char* argv []) {
                     } else if (command == '\n') {
                         select = false;
                         editing = true;
+                        if (edit_buf == " ") edit_buf = "";
                         edit_col = edit_buf.length();
                         skip = true;
                         //edit_col = select_cursor;
@@ -506,8 +522,8 @@ int main(int argc, char* argv []) {
                         if (select_cursor < 0) select_cursor = 0;
                     } else if (command == KEY_RIGHT) {
                         select_cursor++;
-                        if (select_cursor > xmldoc.editor_lines[cursor].node->num_settable()) {
-                            select_cursor = xmldoc.editor_lines[cursor].node->num_settable();
+                        if (select_cursor >= xmldoc.editor_lines[cursor].node->num_settable()) {
+                            select_cursor = xmldoc.editor_lines[cursor].node->num_settable()-1;
                         }
                     }
                     
@@ -517,7 +533,7 @@ int main(int argc, char* argv []) {
                 } else {
                     select = false;
                     editing = true;
-                    edit_buf = xmldoc.editor_lines[cursor].text;
+                    edit_buf = xmldoc.editor_lines[cursor].node->settable_parts()[0];
                     edit_col = edit_buf.length();
                 }
             }
@@ -529,10 +545,12 @@ int main(int argc, char* argv []) {
                 if (!skip) c = getch();
                 if (c == '\n' or c == 27) { // 27 == ESC
                     //xmldoc.editor_lines[cursor].text = xmldoc.editor_lines[cursor].node->to_start_str();
-                    xmldoc.editor_lines[cursor].node->set(select_cursor, edit_buf);
-                    xmldoc.render();
-                    editing = false;
-                    if (xmldoc.editor_lines[cursor].node->num_settable() > 1) select = true;
+                    bool set = xmldoc.editor_lines[cursor].node->set(select_cursor, edit_buf);
+                    if (set) {
+                        xmldoc.render();
+                        editing = false;
+                        if (xmldoc.editor_lines[cursor].node->num_settable() > 1) select = true;
+                    }
                 } else if (c == '\x7f' or c == KEY_BACKSPACE) {
                     if (edit_col >= 1) {
                         edit_buf.erase(edit_col-1, 1);
@@ -594,7 +612,11 @@ int main(int argc, char* argv []) {
             attrset(COLOR_PAIR(1));
             printw(edit_buf.c_str());
             if (select) {
-                move(LINES-1, COLS-1);
+                if (edit_buf.length() == 0) {
+                    move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
+                } else {
+                    move(LINES-1, COLS-1);
+                }
             } else if (editing) {
                 move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + edit_col);
             }
