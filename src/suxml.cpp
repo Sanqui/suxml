@@ -20,7 +20,7 @@ using namespace std;
 
 #define UNREAD() in->seekg(-1, ios::cur)
 #define READ_CHAR() in->read((char*)&c, 1)
-#define READ_CHAR_NO_EOF() READ_CHAR(); if (in->eof()) throw "Early EOF"
+
 #define WHITESPACE " \t\n"
 #define INVALID_ELEMENT_FIRST_CHARS "-.0123456789"
 #define INVALID_ELEMENT_CHARS "!\"#$%&'()*+,;<=?@[\\]^`{|}~"
@@ -34,6 +34,19 @@ bool is_whitespace(string s) {
     }
     return true;
 }
+
+class XMLNode;
+
+class EditorLine {
+    public:
+        bool selectable;
+        int depth;
+        string text;
+        XMLNode* node;
+        
+        EditorLine(bool selectable, int depth, string text, XMLNode* node)
+            :selectable(selectable), depth(depth), text(text), node(node) {};
+};
 
 class XMLAttribute {
     public:
@@ -58,6 +71,9 @@ class XMLNode {
         string to_str() const {
             return to_str(0);
         }
+        virtual void render_into(vector<EditorLine>* lines, int depth) {
+            lines->push_back(EditorLine(true, depth, to_str(), this));
+        }
 };
 
 class XMLContent : public XMLNode {
@@ -67,6 +83,12 @@ class XMLContent : public XMLNode {
         
         string to_str(int depth) const {
             return content;
+        }
+        
+        void render_into(vector<EditorLine>* lines, int depth) {
+            string s = to_str(0);
+            replace(s.begin(), s.end(), '\n', ' ');
+            lines->push_back(EditorLine(true, depth, s, this));
         }
 };
 
@@ -121,6 +143,16 @@ class XMLTag : public XMLNode {
                 out += string(depth, TAB);
                 out += get_end_str();
                 return out;
+            }
+        }
+        
+        void render_into(vector<EditorLine>* lines, int depth) {
+            lines->push_back(EditorLine(true, depth, get_start_str(), this));
+            if (children.size()) {
+                for (auto child : children) {
+                    child->render_into(lines, depth+1);
+                }
+                lines->push_back(EditorLine(false, depth, get_end_str(), this));
             }
         }
         
@@ -222,6 +254,8 @@ class XMLDocument {
                     }
                 }
             }
+            read_whitespace(true);
+            if (!in->eof()) throw "root tag isn't alone";
             
             
             return true;
@@ -230,15 +264,31 @@ class XMLDocument {
         string to_str() const {
             return root.to_str(0);
         }
+        void render() {
+            root.render_into(&editor_lines, 0);
+        }
+        
+        int last_parsed_line = 0;
+        
+        vector<EditorLine> editor_lines;
     private:
         ifstream* in;
         char c;
         
-        void read_whitespace() {
+        void read_whitespace(bool eof_fine) {
             while (true) {
                 READ_CHAR();
+                if (c == '\n') last_parsed_line++;
                 if (!isspace(c)) return;
+                if (in->eof()) {
+                    if (eof_fine) return;
+                    throw "early eof";
+                }
             }
+        }
+        
+        void read_whitespace() {
+            read_whitespace(false);
         }
         
         string read_string_until(string chars) {
@@ -246,6 +296,7 @@ class XMLDocument {
             while (true) {
                 READ_CHAR();
                 if (in->eof()) throw "early eof";
+                if (c == '\n') last_parsed_line++;
                 for (char stop_char : chars) {
                     if (c == stop_char) return result;
                 }
@@ -271,9 +322,20 @@ class XMLDocument {
         }
 };
 
-int main() {
-    /*initscr();
+int main(int argc, char* argv []) {
+    if (argc == 1) {
+        printf("usage: ./suxml file.xml\n");
+        return 0;
+    }
+    //signal(SIGINT, finish);
+    initscr();
     clear();
+    keypad(stdscr, TRUE);
+    start_color();
+    init_pair(1, COLOR_BLACK,     COLOR_WHITE);
+    init_pair(2, COLOR_WHITE,     COLOR_BLACK);
+    
+    attrset(COLOR_PAIR(0));
     
     printw("\n\n\n\
                              ##                          \n\
@@ -284,19 +346,70 @@ int main() {
      #  #   #   # #   # # #   #                          \n\
   ####  ####   #   #  # # #   #                          \n\
                                                          \n\
-     ");
-    getch();
-    */
+");
+    
+    printw("Parsing file %s...\n", argv[1]);
     XMLDocument xmldoc = XMLDocument();
+    string error = "";
     try {
-        xmldoc.parse("test.xml");
+        xmldoc.parse(argv[1]);
     } catch (char const* message) {
-        printf("Error while parsing: %s\n", message);
+        error = message;
     }
     
-    DEBUG("The root element is: %s with %d children\n", xmldoc.root.element.c_str(), xmldoc.root.children.size());
-    cout << xmldoc.to_str();
-    cout << "\n";
+    xmldoc.render();
     
-    //endwin();
+    if (error.length() == 0) {
+        printw("File parsed successfully\n");
+    } else {
+        printw("\x1b[31mError while parsing:\x1b[39;49m line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
+        printw("Error encountered while parsing.\n");
+        printw("suxml will edit the partial file.\n");
+    }
+    //getch();
+    clear();
+    
+    //DEBUG("The root element is: %s with %d children\n", xmldoc.root.element.c_str(), xmldoc.root.children.size());
+    //cout << xmldoc.to_str();
+    //cout << "\n";
+    
+    int top = 0;
+    int cursor = 0;
+    bool redraw = true;
+    
+    while (true) {
+        if (!redraw) {
+            int command = getch();
+            if (command == 'q') break;
+            if (command == KEY_UP) {cursor--; redraw = true;}
+            if (command == KEY_DOWN) {cursor++; redraw = true;}
+        }
+        if (cursor < 0) cursor = 0;
+        if (cursor >= xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
+        
+        for (int y=top; y<LINES; y++) {
+            if (y < xmldoc.editor_lines.size()) {
+                if (y == cursor) {
+                    //move(y, 1 + xmldoc.editor_lines[y].depth*2);
+                    //printw("▶");
+                    attrset(COLOR_PAIR(1));
+                }
+                move(y, 2 + xmldoc.editor_lines[y].depth*2);
+                if (xmldoc.editor_lines[y].text.size()) {
+                    printw(xmldoc.editor_lines[y].text.c_str());
+                } else {
+                    printw(" ");
+                }
+                attrset(COLOR_PAIR(0));
+            } else {
+                move(y, 0);
+                //printw("~");
+            }
+        }
+        redraw = false;
+    }
+          
+    endwin();
+    
+    return 0;
 }
