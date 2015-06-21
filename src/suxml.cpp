@@ -404,17 +404,22 @@ int main(int argc, char* argv []) {
         if (cursor < 0) cursor = 0;
         if (cursor >= xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
         
+        while (cursor < top+(LINES/3)) top--;
+        if (top < 0) top = 0;
+        while (cursor > top+(LINES/3)*2) top++;
+        
         clear();
-        for (int y=top; y<LINES-1; y++) {
-            if (y < xmldoc.editor_lines.size()) {
-                if (y == cursor) {
+        for (int y=0; y<LINES-1; y++) {
+            int line_num = top+y;
+            if (line_num < xmldoc.editor_lines.size()) {
+                if (line_num == cursor) {
                     //move(y, 1 + xmldoc.editor_lines[y].depth*2);
                     //printw("▶");
                     attrset(COLOR_PAIR(1));
                 }
-                move(y, 2 + xmldoc.editor_lines[y].depth*2);
-                if (xmldoc.editor_lines[y].text.size()) {
-                    printw(xmldoc.editor_lines[y].text.c_str());
+                move(y, 2 + xmldoc.editor_lines[line_num].depth*2);
+                if (xmldoc.editor_lines[line_num].text.size()) {
+                    printw(xmldoc.editor_lines[line_num].text.c_str());
                 } else {
                     printw(" ");
                 }
