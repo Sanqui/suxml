@@ -322,6 +322,8 @@ class XMLDocument {
         }
 };
 
+const char* help_text[] = {"Q - QUIT", "W - WRITE", "RETURN - EDIT"};
+
 int main(int argc, char* argv []) {
     if (argc == 1) {
         printf("usage: ./suxml file.xml\n");
@@ -332,6 +334,7 @@ int main(int argc, char* argv []) {
     clear();
     keypad(stdscr, TRUE);
     start_color();
+    // the black isn't true black...  but init_color didn't work
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
     init_pair(2, COLOR_WHITE,     COLOR_BLACK);
     
@@ -381,13 +384,28 @@ int main(int argc, char* argv []) {
         if (!redraw) {
             int command = getch();
             if (command == 'q') break;
-            if (command == KEY_UP) {cursor--; redraw = true;}
-            if (command == KEY_DOWN) {cursor++; redraw = true;}
+            if (command == KEY_UP) {
+                cursor--;
+                while (cursor >= 0
+                    && !xmldoc.editor_lines[cursor].selectable) {
+                    cursor--;
+                }
+                redraw = true;
+            }
+            if (command == KEY_DOWN) {
+                cursor++;
+                while (cursor < xmldoc.editor_lines.size()
+                    && !xmldoc.editor_lines[cursor].selectable) {
+                    cursor++;
+                }
+                redraw = true;
+            }
         }
         if (cursor < 0) cursor = 0;
         if (cursor >= xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
         
-        for (int y=top; y<LINES; y++) {
+        clear();
+        for (int y=top; y<LINES-1; y++) {
             if (y < xmldoc.editor_lines.size()) {
                 if (y == cursor) {
                     //move(y, 1 + xmldoc.editor_lines[y].depth*2);
@@ -406,6 +424,18 @@ int main(int argc, char* argv []) {
                 //printw("~");
             }
         }
+        move(LINES-1, 0);
+        printw("  ");
+        for (auto text : help_text) {
+            printw(" ");
+            attrset(COLOR_PAIR(1));
+            printw(" ");
+            printw(text);
+            printw(" ");
+            attrset(COLOR_PAIR(0));
+            printw(" ");
+        }
+        move(LINES-1, COLS-1);
         redraw = false;
     }
           
