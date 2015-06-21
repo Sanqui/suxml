@@ -51,8 +51,15 @@ class EditorLine {
         string text;
         XMLNode* node;
         
+        bool highlight;
+        
         EditorLine(bool selectable, int depth, string text, XMLNode* node)
-            :selectable(selectable), depth(depth), text(text), node(node) {};
+            :selectable(selectable), depth(depth), text(text), node(node) {
+            highlight = false;
+        };
+            
+        EditorLine(bool selectable, int depth, string text, XMLNode* node, bool highlight)
+            :selectable(selectable), depth(depth), text(text), node(node), highlight(highlight) {};
 };
 
 class XMLAttribute {
@@ -73,6 +80,7 @@ class XMLNode {
         virtual ~XMLNode() {};
         
         bool expanded = false; // this is internal to the editor
+        bool found = false;
         
         virtual int is_expandable() { return false; }
         virtual int num_settable() { return 1; }
@@ -80,6 +88,11 @@ class XMLNode {
         virtual bool del(int which) { return false; }
         virtual bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) { return false; }
         virtual bool del_node(XMLNode* node) { return false; }
+        virtual bool find(string str) {
+            expanded = false;
+            return false;
+        }
+        
         
         virtual vector<string> settable_parts() { return vector<string>(); }
         
@@ -152,17 +165,18 @@ class XMLTag : public XMLNode {
         vector<XMLNode*> children;
         
         pair<bool, int> set(int which, string text) {
+            found = false;
             which--;
             if (which == -1) {
                 if (text.size() == 0) return make_pair(false, -1);
-                int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">");
+                int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                 if (invalid != -1) return make_pair(false, invalid);
                 element = text;
             }
             else if (which/2 < attributes.size()) {
                 if (which % 2 == 0) {
                     if (text.size() == 0) return make_pair(false, -1);
-                    int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">");
+                    int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                     if (invalid != -1) return make_pair(false, invalid);
                     attributes[which/2].attribute = text;
                 }
@@ -173,7 +187,7 @@ class XMLTag : public XMLNode {
                 }
             } else {
                 if (text.size() == 0) return make_pair(true, -1);
-                int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">");
+                int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                 if (invalid != -1) return make_pair(false, invalid);
                 attributes.push_back(XMLAttribute(text, ""));
             }
@@ -291,16 +305,16 @@ class XMLTag : public XMLNode {
         void render_into(vector<EditorLine>* lines, int depth) {
             //int start_line = lines->size();
             if (children.size() and expanded) {
-                lines->push_back(EditorLine(true, depth, get_start_str(), this));
+                lines->push_back(EditorLine(true, depth, get_start_str(), this, found));
                 for (auto& child : children) {
                     child->render_into(lines, depth+1);
                 }
-                lines->push_back(EditorLine(false, depth, get_end_str(), this));
+                lines->push_back(EditorLine(false, depth, get_end_str(), this, found));
                 //(*lines)[start_line].child_lines = lines->size()-start_line-1;
             } else if (children.size()) {
-                lines->push_back(EditorLine(true, depth, get_start_str()+" ...", this));
+                lines->push_back(EditorLine(true, depth, get_start_str()+" ...", this, found));
             } else {
-                lines->push_back(EditorLine(true, depth, get_start_str(), this));
+                lines->push_back(EditorLine(true, depth, get_start_str(), this, found));
             }
         }
         
@@ -327,6 +341,22 @@ class XMLTag : public XMLNode {
             return make_pair(line, select_x);
         }
         
+        bool find(string str) {
+            expanded = false;
+            for (auto& child : children) {
+                if (child->find(str)) {
+                    expanded = true;
+                    //return true;
+                }
+            }
+            if (element == str) {
+                found = true;
+                expanded = true;
+                return true;
+            }
+            if (expanded) return true; // found in a child
+            return false;
+        }
 };
 
 class XMLDeclaration : public XMLTag {
@@ -472,6 +502,10 @@ class XMLDocument {
             //editor_lines[0].child_lines = 0;
         }
         
+        void find(string str) {
+            root.find(str);
+        }
+        
         int last_parsed_line = 0;
         
         vector<EditorLine> editor_lines;
@@ -527,7 +561,7 @@ class XMLDocument {
 };
 
 const char* help_text[] = {
-    "Q - QUIT", "W - WRITE", "RETURN - EDIT", "ESC - BACK", "DEL - DELETE", "I - INSERT", "N - NEW TAG"};
+    "Q -QUIT", "W -WRITE", "RET -EDIT", "ESC -BACK", "DEL -DELETE", "I -INSERT", "N -NEW TAG", "/ -FIND"};
 
 int main(int argc, char* argv []) {
     if (argc == 1) {
@@ -543,6 +577,8 @@ int main(int argc, char* argv []) {
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
     init_pair(2, COLOR_BLACK,     COLOR_RED);
     init_pair(3, COLOR_BLACK,     COLOR_GREEN);
+    init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
+    init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
     
     attrset(COLOR_PAIR(0));
     
@@ -594,6 +630,8 @@ int main(int argc, char* argv []) {
     int edit_col = 0;
     
     int highlight_help_text = -1;
+    
+    string find_string = "";
     
     //int last_jump = 0;
     
@@ -656,6 +694,41 @@ int main(int argc, char* argv []) {
                     cursor++;
                     xmldoc.render();
                 }
+            } else if (command == '/') {
+                find_string = "";
+                move(LINES-1, 0);
+                printw(string(COLS, ' ').c_str());
+                move(LINES-1, 0);
+                printw(" Search for: ");
+                
+                while (true) {
+                    int c = getch();
+                    if (c == 27) { // ESC
+                        find_string = "";
+                        break;
+                    } else if (c == '\n') {
+                        break;
+                    } else if (c == '\x7f' or c == KEY_BACKSPACE) {
+                        if (find_string.length() > 0) {
+                            find_string.erase(find_string.end()-1);
+                        }
+                    } else if (isprint(c)) {
+                        find_string += string(1, c);
+                    }
+                    move(LINES-1, 0);
+                    printw(" Search for: ");
+                    attrset(COLOR_PAIR(1));
+                    printw((find_string).c_str());
+                    attrset(COLOR_PAIR(0));
+                    printw(" ");
+                    move(LINES-1, 13+find_string.length());
+                }
+                
+                if (find_string.length() > 0) {
+                    xmldoc.find(find_string);
+                    xmldoc.render();
+                }
+                
             }
         }
         int command = -1;
@@ -800,9 +873,14 @@ int main(int argc, char* argv []) {
             if (line_num < xmldoc.editor_lines.size()) {
                 if ((line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted)
                     && xmldoc.editor_lines[cursor].selectable) {
-                    //move(y, 1 + xmldoc.editor_lines[y].depth*2);
-                    //printw("▶");
-                    attrset(COLOR_PAIR(1));
+                    //move(y, 1 + xmldoc.editor_lines[y].depth*2);printw("▶");
+                    if (!xmldoc.editor_lines[line_num].highlight) {
+                        attrset(COLOR_PAIR(1));
+                    } else {
+                        attrset(COLOR_PAIR(5));
+                    }
+                } else if (xmldoc.editor_lines[line_num].highlight) {
+                    attrset(COLOR_PAIR(4));
                 }
                 move(y, 2 + xmldoc.editor_lines[line_num].depth*2);
                 if (xmldoc.editor_lines[line_num].text.size()) {
@@ -829,7 +907,7 @@ int main(int argc, char* argv []) {
             }
         }
         move(LINES-1, 0);
-        printw("  ");
+        printw(" ");
         int i = 0;
         for (auto text : help_text) {
             //printw(" ");
@@ -842,7 +920,7 @@ int main(int argc, char* argv []) {
             }
             printw(" ");
             attrset(COLOR_PAIR(0));
-            printw(" ");
+            //printw(" ");
             i++;
         }
         highlight_help_text = -1;
