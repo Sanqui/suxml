@@ -372,6 +372,7 @@ class XMLDocument {
                 read_whitespace();
                 UNREAD();
                 string content = read_string_until("<");
+                content.erase(content.find_last_not_of(WHITESPACE)+1);
                 if (content.size()) {
                     tag_stack.back()->children.push_back(new XMLContent(content));
                 }
@@ -497,7 +498,7 @@ class XMLDocument {
 };
 
 const char* help_text[] = {
-    "Q - QUIT", "W - WRITE", "RETURN - EDIT", "ESC - BACK", "DEL - DELETE"};
+    "Q - QUIT", "W - WRITE", "RETURN - EDIT", "ESC - BACK", "DEL - DELETE", "I - INSERT"};
 
 int main(int argc, char* argv []) {
     if (argc == 1) {
@@ -512,6 +513,7 @@ int main(int argc, char* argv []) {
     start_color();
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
     init_pair(2, COLOR_BLACK,     COLOR_RED);
+    init_pair(3, COLOR_BLACK,     COLOR_GREEN);
     
     attrset(COLOR_PAIR(0));
     
@@ -562,6 +564,8 @@ int main(int argc, char* argv []) {
     int select_cursor = 0;
     int edit_col = 0;
     
+    int highlight_help_text = -1;
+    
     //int last_jump = 0;
     
     xmldoc.root.expanded = true;
@@ -571,6 +575,15 @@ int main(int argc, char* argv []) {
         if (!redraw) {
             int command = getch();
             if (command == 'q') break;
+            else if (command == 'w') {
+                ofstream fout (argv[1], ios::out);
+                if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
+                    throw "failed to write";
+                }
+                fout << xmldoc.to_str();
+                fout.close();
+                highlight_help_text = 1;
+            }
             if (command == '\n') {
                 if (xmldoc.editor_lines[cursor].selectable) {
                     select = true;
@@ -776,15 +789,19 @@ int main(int argc, char* argv []) {
         }
         move(LINES-1, 0);
         printw("  ");
+        int i = 0;
         for (auto text : help_text) {
             printw(" ");
             attrset(COLOR_PAIR(1));
+            if (highlight_help_text == i) attrset(COLOR_PAIR(3));
             printw(" ");
             printw(text);
             printw(" ");
             attrset(COLOR_PAIR(0));
             printw(" ");
+            i++;
         }
+        highlight_help_text = -1;
         move(LINES-1, COLS-1);
         redraw = false;
     }
