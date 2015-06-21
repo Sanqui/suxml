@@ -37,7 +37,7 @@ bool is_whitespace(string s) {
 
 int any_char_in_string(string s, string chars) {
     for (char c : chars) {
-        if (s.find(c) != -1) return s.find(c);
+        if (s.find(c) != string::npos) return s.find(c);
     }
     return -1;
 }
@@ -178,7 +178,7 @@ class XMLTag : public XMLNode {
                 if (invalid != -1) return make_pair(false, invalid);
                 element = text;
             }
-            else if (which/2 < attributes.size()) {
+            else if (which/2 < (int)attributes.size()) {
                 if (which % 2 == 0) {
                     if (text.size() == 0) return make_pair(false, -1);
                     int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
@@ -202,7 +202,7 @@ class XMLTag : public XMLNode {
         bool del(int which) {
             which--;
             if (which == -1) return false;
-            if (which/2 < attributes.size()) {
+            if (which/2 < (int)attributes.size()) {
                 if (which % 2 == 0) {
                     attributes.erase(attributes.begin() + which/2);
                 } else {
@@ -823,7 +823,7 @@ int main(int argc, char* argv []) {
                         flash();
                     } 
                 } else if (c == KEY_DC) { // DELETE
-                    if (edit_col < edit_buf.length()) {
+                    if (edit_col < (int)edit_buf.length()) {
                         edit_buf.erase(edit_col, 1);
                     } else {
                         flash();
@@ -833,7 +833,7 @@ int main(int argc, char* argv []) {
                     if (edit_col < 0) edit_col = 0;
                 } else if (c == KEY_RIGHT) {
                     edit_col += 1;
-                    if (edit_col > edit_buf.length()) edit_col = edit_buf.length();
+                    if (edit_col > (int)edit_buf.length()) edit_col = edit_buf.length();
                 } else if (isprint(c)) {
                     edit_buf.insert(edit_col, string(1, c));
                     edit_col++;
@@ -897,7 +897,7 @@ int main(int argc, char* argv []) {
         highlighted = xmldoc.editor_lines[cursor].node;
         
         if (cursor < 0) cursor = 0;
-        if (cursor >= xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
+        if (cursor >= (int)xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
         
         while (cursor < top+(LINES/3)) top--;
         if (top < 0) top = 0;
@@ -912,7 +912,7 @@ int main(int argc, char* argv []) {
         //int line_num = top;
         for (int y=0; y<LINES-1; y++) {
             int line_num = top+y;
-            if (line_num < xmldoc.editor_lines.size()) {
+            if (line_num < (int)xmldoc.editor_lines.size()) {
                 if ((line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted)
                     && xmldoc.editor_lines[cursor].selectable) {
                     //move(y, 1 + xmldoc.editor_lines[y].depth*2);printw("▶");
@@ -926,7 +926,7 @@ int main(int argc, char* argv []) {
                 }
                 move(y, 2 + xmldoc.editor_lines[line_num].depth*2);
                 int chars_fit = COLS - (2 + xmldoc.editor_lines[line_num].depth*2);
-                if (xmldoc.editor_lines[line_num].text.size() > chars_fit) {
+                if ((int)xmldoc.editor_lines[line_num].text.size() > chars_fit) {
                     printw(xmldoc.editor_lines[line_num].text.substr(0, chars_fit-1).c_str());
                     attrset(COLOR_PAIR(1));
                     printw("$");
