@@ -62,6 +62,7 @@ int main(int argc, char* argv []) {
     init_pair(3, COLOR_BLACK,     COLOR_GREEN);
     init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
     init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
+    init_pair(6, COLOR_RED,       COLOR_BLACK);
     
     // Display the pretty suxml banner I spent like a minute on
     attrset(COLOR_PAIR(0));
@@ -83,7 +84,11 @@ int main(int argc, char* argv []) {
     if (error.length() == 0) {
         printw("File parsed successfully\n");
     } else {
-        printw("\x1b[31mError while parsing:\x1b[39;49m line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
+        attrset(COLOR_PAIR(6));
+        printw("Error while parsing:");
+        attrset(COLOR_PAIR(0));
+        printw(" line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
+        printw("\n");
         printw("Error encountered while parsing.\n");
         printw("suxml will edit the partial file.\n");
     }

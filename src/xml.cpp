@@ -404,7 +404,7 @@ class XMLTag : public XMLNode {
             return "</" + element + ">";
         }
         
-        string to_str(int depth) const {
+        virtual string to_str(int depth) const {
             if (!children.size()) {
                 return get_start_str();
             } else {
@@ -498,16 +498,33 @@ class XMLTag : public XMLNode {
 /// XML Declaration
 /** Represents the XML declaration
  *  According to the specification, a XML document may contain a XML declaration
- *  at the start.  We respect this, but don't currently expose it.
- * 
+ *  at the start.  We expose this, but do not allow it to be edited
+ *  (it wouldn't make sense).
+ *
  *  Example declaration: &lt;?xml version="1.0" encoding="UTF-8" standalone="no" ?>
  */
-class XMLDeclaration : public XMLTag {
+class XMLDeclaration : public XMLNode {
     public:
-        XMLDeclaration() : XMLTag() {};
+        XMLDeclaration() : XMLNode() {};
+        
+        /// The attributes on the declaration
+        vector<XMLAttribute> attributes;
         
         string to_str(int depth) const {
-            return "<?todo?>";
+            string out = "<?xml";
+            for (XMLAttribute attr : attributes) {
+                out += " ";
+                out += attr.attribute;
+                out += "=\"";
+                out += attr.value;
+                out += "\"";
+            }
+            out += "?>";
+            return out;
+        }
+        
+        virtual void render_into(vector<EditorLine>* lines, int depth) {
+            lines->push_back(EditorLine(false, depth, to_str(0), this));
         }
 };
 
@@ -554,6 +571,8 @@ class XMLComment : public XMLNode {
  */
 class XMLDocument {
     public:
+        /// Whether the document has a declaration
+        bool have_declaration;
         /// The XML declaration, if any
         XMLDeclaration declaration;
         /// The root tag, which is necessary
@@ -577,20 +596,29 @@ class XMLDocument {
             // the tag stack as we work ourselves through the tree
             vector<XMLTag*> tag_stack;
             
-            // no content can be present before the roo tag
-            if (!is_whitespace(read_string_until("<"))) throw "content before root tag";
+            // no content can be present before the root tag
+            if (!is_whitespace(read_string_until("<"))) throw "content before root tag or declaration";
+            READ_CHAR();
+            if (c == '?') {
+                // this is a declaration
+                string dec_name = read_string_until(WHITESPACE "?>");
+                if (c == '>') throw "invalid declaration";
+                if (dec_name != "xml") throw "declaration does not start with <?xml";
+                
+                have_declaration = true;
+                declaration.attributes = read_attributes(true);
+                if (c != '?') throw "invalid declaration";
+                READ_CHAR();
+                if (c != '>') throw "invalid declaration";
+                if (!is_whitespace(read_string_until("<"))) throw "content between root tag and declaration";
+            } else {
+                UNREAD();
+            }
+            // this is the root tag
             string element_name = read_string_until(WHITESPACE ">");
             UNREAD();
-            if (element_name.find("!") == 0) {
-                element_name = element_name.substr(1);
-                // TODO
-                
-                //XMLDeclaration declaration = XMLDeclaration();
-            } else {
-                // this is the root tag
-                root = XMLTag(element_name);
-                root.attributes = read_attributes();
-            }
+            root = XMLTag(element_name);
+            root.attributes = read_attributes();
             tag_stack.push_back(&root);
             while (tag_stack.size()) {
                 read_whitespace();
@@ -691,7 +719,11 @@ class XMLDocument {
          *
 	     *  \return String representation of the XML document */
         string to_str() const {
-            return root.to_str(0);
+            string out = "";
+            if (have_declaration) {
+                out += declaration.to_str(0)+"\n";
+            }
+            return out+root.to_str(0);
         }
         
         /// Renders the XML document into EditorLines
@@ -700,6 +732,9 @@ class XMLDocument {
          */
         void render() {
             editor_lines.clear();
+            if (have_declaration) {
+                declaration.render_into(&editor_lines, 0);
+            }
             root.render_into(&editor_lines, 0);
         }
         
@@ -751,12 +786,13 @@ class XMLDocument {
             }
         }
         
-        vector<XMLAttribute> read_attributes() {
+        vector<XMLAttribute> read_attributes(bool is_declaration) {
             vector<XMLAttribute> attributes;
             while (true) {
                 read_whitespace();
                 if (c == '>') break;
                 if (c == '/') break;
+                if (is_declaration and c == '?') break;
                 UNREAD();
                 string name = read_string_until(WHITESPACE "=");
                 if (c != '=') throw "attribute lacks value";
@@ -766,5 +802,8 @@ class XMLDocument {
                 attributes.push_back(XMLAttribute(name, value));
             }
             return attributes;
+        }
+        vector<XMLAttribute> read_attributes() {
+            return read_attributes(false);
         }
 };
