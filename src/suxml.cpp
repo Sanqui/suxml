@@ -28,7 +28,7 @@ using namespace std;
 const char* help_text[] = {
     "Q -QUIT", "W -WRITE", "RET -EDIT", "ESC -BACK",
     "DEL -DELETE", "I -INSERT", "N -NEW TAG", "/ -FIND",
-    "E -EXPAND ALL"};
+    "E -EXPAND ALL", "C -COMMENT"};
 
 /// Ask for confirmation before an operation
 bool ask(const char* question) {
@@ -163,6 +163,13 @@ int main(int argc, char* argv []) {
                 xmldoc.editor_lines[cursor].node->expanded = true;
                 if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
                   !xmldoc.editor_lines[cursor].selectable, new XMLTag(""))) {
+                    cursor++;
+                    xmldoc.render();
+                }
+            } else if (command == 'c') { // COMMENT
+                xmldoc.editor_lines[cursor].node->expanded = true;
+                if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
+                  !xmldoc.editor_lines[cursor].selectable, new XMLComment(""))) {
                     cursor++;
                     xmldoc.render();
                 }
