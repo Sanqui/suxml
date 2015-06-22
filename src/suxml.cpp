@@ -25,6 +25,19 @@ const char* help_text[] = {
     "DEL -DELETE", "I -INSERT", "N -NEW TAG", "/ -FIND",
     "E -EXPAND ALL"};
 
+/// Ask for confirmation before an operation
+bool ask(const char* question) {
+    move(LINES-1, 0);
+    printw(string(COLS, ' ').c_str());
+    move(LINES-1, 0);
+    printw(" ");
+    printw(question);
+    printw("  Y/N ");
+    int c = getch();
+    if (c == 'y') return true;
+    return false;
+}
+
 int main(int argc, char* argv []) {
     // Error out if we don't get a file
     if (argc == 1) {
@@ -103,15 +116,18 @@ int main(int argc, char* argv []) {
         if (!redraw) {
             int command = getch();
             if (command == 'q') { // QUIT
-                break;
+                // ask for confirmation when quitting!
+                if (ask("Really quit?")) break;
             } else if (command == 'w') { // WRITE
-                ofstream fout (argv[1], ios::out);
-                if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
-                    throw "failed to write";
+                if (ask("Save?")) {
+                    ofstream fout (argv[1], ios::out);
+                    if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
+                        throw "failed to write";
+                    }
+                    fout << xmldoc.to_str();
+                    fout.close();
+                    highlight_help_text = 1;
                 }
-                fout << xmldoc.to_str();
-                fout.close();
-                highlight_help_text = 1;
             } else if (command == '\n') { // EDIT
                 if (xmldoc.editor_lines[cursor].selectable) {
                     select = true;
