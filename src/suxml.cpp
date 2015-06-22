@@ -3,7 +3,7 @@
  *  \author David Labský <labskdav@fit.cvut.cz> */
  
 /** \mainpage
- *  This is a simple and opinionaeted interactive xml editor using ncurses.
+ *  This is a simple and opinionated interactive xml editor using ncurses.
  **/
  
 #include <cstdio>
