@@ -2,9 +2,6 @@
  *  Implementation of XML classes.
  *  \author David Labský <labskdav@fit.cvut.cz> */
 
-/** \mainpage
- *  This project implements the representation of a XML document in memory.
- **/
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -229,7 +226,7 @@ class XMLContent : public XMLNode {
  *  A XML tag has attributes and children.  All of these are stored in the
  *  object and can be accessed or edited through the means of set(), etc.
  * 
- *  Example tags: <br />, <b>hello</b>
+ *  Example tags: &lt;br />, &lt;b>hello&lt;/b>
  */
 class XMLTag : public XMLNode {
     public:
@@ -503,7 +500,7 @@ class XMLTag : public XMLNode {
  *  According to the specification, a XML document may contain a XML declaration
  *  at the start.  We respect this, but don't currently expose it.
  * 
- *  Example declaration: <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+ *  Example declaration: &lt;?xml version="1.0" encoding="UTF-8" standalone="no" ?>
  */
 class XMLDeclaration : public XMLTag {
     public:
@@ -519,7 +516,7 @@ class XMLDeclaration : public XMLTag {
  *  A XML comment can occur at any place inside content.  We expose comments
  *  and allow them to be edited.
  * 
- *  Example comment: <!-- hello! -->
+ *  Example comment: &lt;!-- hello! -->
  */
 class XMLComment : public XMLNode {
     public:

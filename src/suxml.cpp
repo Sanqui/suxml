@@ -1,6 +1,11 @@
 /** \file suxml.cpp
  *  UI code for suxml, the XML editor
  *  \author David Labský <labskdav@fit.cvut.cz> */
+ 
+/** \mainpage
+ *  This is a simple and opinionaeted interactive xml editor using ncurses.
+ **/
+ 
 #include <cstdio>
 #include <cassert>
 #include <cstdlib>
