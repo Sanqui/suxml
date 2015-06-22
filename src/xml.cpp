@@ -316,6 +316,7 @@ class XMLTag : public XMLNode {
             int i = 0;
             for (auto i_node : children) {
                 if (node == &*i_node) {
+                    delete node;
                     children.erase(children.begin() + i);
                     return true;
                 } else if (i_node->del_node(node)) {
@@ -332,6 +333,7 @@ class XMLTag : public XMLNode {
             if (node == this && !force_after) {
                 // simply insert the new node if it's us
                 children.insert(children.begin(), new_node);
+                //delete new_node;
                 return true;
             }
             // depth first insertion of new_node after node
@@ -344,6 +346,7 @@ class XMLTag : public XMLNode {
                     }
                     if (!inserted) {
                         children.insert(children.begin()+i+1, new_node);
+                        //delete new_node;
                     }
                     return true;
                 } else if (i_node->ins_node(node, force_after, new_node)) {
@@ -620,12 +623,12 @@ class XMLComment : public XMLNode {
 class XMLDocument {
     public:
         /// Whether the document has a declaration
-        bool have_declaration;
+        bool have_declaration=false;
         /// The XML declaration, if any
         XMLDeclaration declaration;
         
         /// Whether the document has a doctype
-        bool have_doctype;
+        bool have_doctype=false;
         /// The XML doctype, if any
         XMLDoctype doctype;
         
@@ -682,7 +685,7 @@ class XMLDocument {
             // this is the root tag
             string element_name = read_string_until(WHITESPACE ">");
             UNREAD();
-            root = XMLTag(element_name);
+            root.element = element_name;
             root.attributes = read_attributes();
             if (c != '/') {
                 tag_stack.push_back(&root);
@@ -779,8 +782,14 @@ class XMLDocument {
 	    /** \return True if succesful */
         bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
             // can't insert anything after the root node...
-            if (node == &root && force_after) return false;
-            return root.ins_node(node, force_after, new_node);
+            if (!(node == &root && force_after)) {
+                if (root.ins_node(node, force_after, new_node)) {
+                    return true;
+                }
+            }
+            // we've failed to insert it, so get rid of it.
+            delete new_node;
+            return false;
         }
         
         /// Returns a string representation of the XML document

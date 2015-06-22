@@ -44,6 +44,7 @@ bool ask(const char* question) {
 }
 
 int main(int argc, char* argv []) {
+    
     // Error out if we don't get a file
     if (argc == 1) {
         printf("usage: %s file.xml\n", argv[0]);
