@@ -405,7 +405,7 @@ class XMLTag : public XMLNode {
         }
         
         virtual string to_str(int depth) const {
-            if (!children.size() and !expanded) {
+            if (!children.size() && !expanded) {
                 return get_start_str();
             } else {
                 string out = "";
@@ -693,6 +693,7 @@ class XMLDocument {
             }
             while (tag_stack.size()) {
                 read_whitespace();
+                if (in->eof()) throw "early eof";
                 UNREAD();
                 // read any content between tags
                 while (true) {
@@ -835,6 +836,10 @@ class XMLDocument {
         char c;
         
         void read_whitespace(bool eof_fine) {
+            if (in->eof()) {
+                if (eof_fine) return;
+                throw "early eof";
+            }
             while (true) {
                 READ_CHAR();
                 if (c == '\n') last_parsed_line++;
@@ -851,6 +856,7 @@ class XMLDocument {
         }
         
         string read_string_until(string chars) {
+            if (in->eof()) throw "early eof";
             string result = "";
             while (true) {
                 READ_CHAR();
