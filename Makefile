@@ -1,12 +1,14 @@
+NAME := suxml
+
 #CC := g++
 CC := clang++
 
 compile:
-	$(CC) src/suxml.cpp -o bin/suxml -lncurses -Wall -pedantic -Wno-long-long -O0 -ggdb --std=c++11
+	$(CC) src/suxml.cpp -o ${NAME} -lncurses -Wall -pedantic -Wno-long-long -O0 -ggdb --std=c++11
 run:
-	./bin/suxml
+	./${NAME}
 clean:
-	rm -rf bin/suxml doc/
+	rm -rf ${NAME} doc/
 doc:
 	cd src && doxygen && mv html ../doc && cd -
 
