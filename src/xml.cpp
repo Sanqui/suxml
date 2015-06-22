@@ -684,7 +684,13 @@ class XMLDocument {
             UNREAD();
             root = XMLTag(element_name);
             root.attributes = read_attributes();
-            tag_stack.push_back(&root);
+            if (c != '/') {
+                tag_stack.push_back(&root);
+            } else {
+                // the root tag was empty!
+                READ_CHAR();
+                if (c != '>') throw "incomplete empty root tag";
+            }
             while (tag_stack.size()) {
                 read_whitespace();
                 UNREAD();
