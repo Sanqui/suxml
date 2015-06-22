@@ -5,22 +5,11 @@
 /** \mainpage
  *  This project implements the representation of a XML document in memory.
  **/
-#include <cstdio>
 #include <cassert>
-#include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
-#include <set>
-#include <map>
-#include <list>
-#include <algorithm>
-#include <memory>
-#include <typeinfo>
 using namespace std;
 
 #define UNREAD() in->seekg(-1, ios::cur)
@@ -367,7 +356,7 @@ class XMLTag : public XMLNode {
                 out += attr.value;
                 out += "\"";
             }
-            if (!children.size()) out += " /";
+            if (!children.size() and !expanded) out += " /";
             out += ">";
             return out;
         }
@@ -401,7 +390,7 @@ class XMLTag : public XMLNode {
         
         void render_into(vector<EditorLine>* lines, int depth) {
             //int start_line = lines->size();
-            if (children.size() and expanded) {
+            if (expanded) { // and children.size()
                 lines->push_back(EditorLine(true, depth, get_start_str(), this, found));
                 for (auto& child : children) {
                     child->render_into(lines, depth+1);
@@ -433,7 +422,7 @@ class XMLTag : public XMLNode {
                 if (i != 0 && i % 2 == 0) line += "\"";
                 i++;
             }
-            if (children.size() == 0) line += "/";
+            if (children.size() == 0 and !expanded) line += "/";
             line += ">";
             return make_pair(line, select_x);
         }

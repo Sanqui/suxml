@@ -11,12 +11,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <set>
-#include <map>
-#include <list>
 #include <algorithm>
-#include <memory>
-#include <typeinfo>
 using namespace std;
 
 #include <ncurses.h>
@@ -24,22 +19,25 @@ using namespace std;
 #include "banner.h"
 #include "xml.cpp"
 
-
+/// The help text shown at the bottom of the screen
 const char* help_text[] = {
     "Q -QUIT", "W -WRITE", "RET -EDIT", "ESC -BACK",
     "DEL -DELETE", "I -INSERT", "N -NEW TAG", "/ -FIND",
     "E -EXPAND ALL"};
 
 int main(int argc, char* argv []) {
+    // Error out if we don't get a file
     if (argc == 1) {
         printf("usage: %s file.xml\n", argv[0]);
         return 0;
     }
-    //signal(SIGINT, finish);
+    // Setup ncurses stuff
     initscr();
     clear();
-    keypad(stdscr, TRUE);
-    ESCDELAY = 25;
+    keypad(stdscr, TRUE); // to make some more keys work
+    ESCDELAY = 25; // to make ESC near-instant
+    
+    // set a few colors we'll be using
     start_color();
     init_pair(1, COLOR_BLACK,     COLOR_WHITE);
     init_pair(2, COLOR_BLACK,     COLOR_RED);
@@ -47,11 +45,12 @@ int main(int argc, char* argv []) {
     init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
     init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
     
+    // Display the pretty suxml banner I spent like a minute on
     attrset(COLOR_PAIR(0));
-    
     printw(SUXML_BANNER);
     
     printw("Parsing file %s...\n", argv[1]);
+    // Attempt to parse the file
     XMLDocument xmldoc = XMLDocument();
     string error = "";
     try {
@@ -62,6 +61,7 @@ int main(int argc, char* argv []) {
     
     xmldoc.render();
     
+    // Report an error if one occurred
     if (error.length() == 0) {
         printw("File parsed successfully\n");
     } else {
@@ -69,38 +69,42 @@ int main(int argc, char* argv []) {
         printw("Error encountered while parsing.\n");
         printw("suxml will edit the partial file.\n");
     }
-    //getch();
+    // Wait for the user
+    getch();
     clear();
     
-    //if (xmldoc.root.has_attributes) return 0;
-    //DEBUG("The root element is: %s with %d children\n", xmldoc.root.element.c_str(), xmldoc.root.children.size());
-    //cout << xmldoc.to_str();
-    //cout << "\n";
-    
+    // Window offset from the start of the document (or, the topmost line shown)
     int top = 0;
+    // Currently selected line
     int cursor = 0;
+    // Is select mode active
     bool select = false;
+    // Is editing mode active
     bool editing = false;
+    // Should we redraw immediately
     bool redraw = true;
+    // The currently highlighted node
     XMLNode* highlighted;
+    // The string being edited
     string edit_buf;
+    // Horizontal cursor - which settable piece is being selected
     int select_cursor = 0;
+    // Psition while editing a string
     int edit_col = 0;
     
+    // Which piece of help text should be highlighted in green
     int highlight_help_text = -1;
     
-    string find_string = "";
-    
-    //int last_jump = 0;
-    
+    // expand the root for convenience
     xmldoc.root.expanded = true;
     xmldoc.render();
     
     while (true) {
         if (!redraw) {
             int command = getch();
-            if (command == 'q') break;
-            else if (command == 'w') {
+            if (command == 'q') { // QUIT
+                break;
+            } else if (command == 'w') { // WRITE
                 ofstream fout (argv[1], ios::out);
                 if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
                     throw "failed to write";
@@ -108,26 +112,15 @@ int main(int argc, char* argv []) {
                 fout << xmldoc.to_str();
                 fout.close();
                 highlight_help_text = 1;
-            } else if (command == '\n') {
+            } else if (command == '\n') { // EDIT
                 if (xmldoc.editor_lines[cursor].selectable) {
                     select = true;
                     select_cursor = 0;
                 }
             } else if (command == KEY_UP) {
                 cursor--;
-                /*while (cursor >= 0
-                    && !xmldoc.editor_lines[cursor].selectable) {
-                    cursor--;
-                }*/
             } else if (command == KEY_DOWN) {
-                /*if (!xmldoc.editor_lines[cursor].expanded) {
-                    cursor += xmldoc.editor_lines[cursor].child_lines;
-                }*/
                 cursor++;
-                /*while (cursor < xmldoc.editor_lines.size()
-                    && !xmldoc.editor_lines[cursor].selectable) {
-                    cursor++;
-                }*/
             } else if (command == KEY_RIGHT) {
                 xmldoc.editor_lines[cursor].node->expanded = true;
                 xmldoc.render();
@@ -138,22 +131,22 @@ int main(int argc, char* argv []) {
                 if (xmldoc.del_node(xmldoc.editor_lines[cursor].node)) {
                     xmldoc.render();
                 }
-            } else if (command == 'i') {
+            } else if (command == 'i') { // INSERT
                 xmldoc.editor_lines[cursor].node->expanded = true;
                 if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
                   !xmldoc.editor_lines[cursor].selectable, new XMLContent(""))) {
                     cursor++;
                     xmldoc.render();
                 }
-            } else if (command == 'n') {
+            } else if (command == 'n') { // NEW NODE
                 xmldoc.editor_lines[cursor].node->expanded = true;
                 if (xmldoc.ins_node(xmldoc.editor_lines[cursor].node,
                   !xmldoc.editor_lines[cursor].selectable, new XMLTag(""))) {
                     cursor++;
                     xmldoc.render();
                 }
-            } else if (command == '/') {
-                find_string = "";
+            } else if (command == '/') { // FIND
+                string find_string = "";
                 move(LINES-1, 0);
                 printw(string(COLS, ' ').c_str());
                 move(LINES-1, 0);
@@ -195,7 +188,6 @@ int main(int argc, char* argv []) {
         int command = -1;
         bool skip=true;
         int error_at = -1;
-        //if (select || edit) {
         while (select || editing) {
             if (select) {
                 if (xmldoc.editor_lines[cursor].node->num_settable() > 1) {
@@ -209,8 +201,6 @@ int main(int argc, char* argv []) {
                         if (edit_buf == " ") edit_buf = "";
                         edit_col = edit_buf.length();
                         skip = true;
-                        //edit_col = select_cursor;
-                        //edit_buf = x
                     } else if (command == KEY_LEFT) {
                         select_cursor--;
                         if (select_cursor < 0) select_cursor = 0;
@@ -224,7 +214,6 @@ int main(int argc, char* argv []) {
                         if (del) xmldoc.render();
                     }
                     
-                    //edit_buf = xmldoc.editor_lines[cursor].text;
                     edit_buf = xmldoc.editor_lines[cursor].node->settable_parts()[select_cursor];
                     
                 } else {
@@ -235,13 +224,9 @@ int main(int argc, char* argv []) {
                 }
             }
             if (editing) {
-                //edit_col = 0;
-                //edit_buf = xmldoc.editor_lines[cursor].text;
-                //move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
                 int c = -1;
                 if (!skip) c = getch();
                 if (c == '\n' or c == 27) { // 27 == ESC
-                    //xmldoc.editor_lines[cursor].text = xmldoc.editor_lines[cursor].node->to_start_str();
                     pair<bool, int> set = xmldoc.editor_lines[cursor].node->set(select_cursor, edit_buf);
                     if (set.first) {
                         xmldoc.render();
@@ -275,18 +260,19 @@ int main(int argc, char* argv []) {
                 }
             }
             // render line while selecting or editing
-            //string line = "";
-            //int select_x = 0;
-            //string select_part = "";
             auto line_and_select_x = xmldoc.editor_lines[cursor].node->get_settable_line(select_cursor, edit_buf);
             string line = line_and_select_x.first;
             int select_x = line_and_select_x.second;
             
             attrset(COLOR_PAIR(0));
             move(cursor-top, 0);
+            // show the fact that we're editing a string
             if (editing) printw("*");
             else printw(" ");
             
+            // while editing, we want to make it possible to at least
+            // gracefully edit lines that are too long.
+            // calculate some helper variables for that
             int chars_fit = COLS - (2+xmldoc.editor_lines[cursor].depth*2);
             int extra_lines = 0;
             int overflow = line.length() - chars_fit;
@@ -295,12 +281,14 @@ int main(int argc, char* argv []) {
                 extra_lines++;
             }
             
+            // erase the line and any ones that we're gonna overlap
             move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
             printw(string(chars_fit, ' ').c_str());
             for (int i=0; i<extra_lines; i++) {
                 printw(string(COLS, ' ').c_str());
             }
             
+            // print the line and the selected part over it, inverted
             move(cursor-top, 2+xmldoc.editor_lines[cursor].depth*2);
             printw(line.c_str());
             move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
@@ -309,48 +297,56 @@ int main(int argc, char* argv []) {
             attrset(COLOR_PAIR(1));
             printw(edit_buf.c_str());
             if (error_at != -1) {
+                // if there's an error, highlight it in red
                 attrset(COLOR_PAIR(2));
                 move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + error_at);
                 printw(string(1, edit_buf[error_at]).c_str());
                 error_at = -1;
             }
             if (select) {
+                // if we're selecting and the part is empty (new attribute),
+                // move the cursor there, otherwise place the cursor to the
+                // corner (the inverted colors are enough to denote selection)
                 if (edit_buf.length() == 0) {
                     move(cursor-top, 2 + (xmldoc.editor_lines[cursor].depth*2) + select_x);
                 } else {
                     move(LINES-1, COLS-1);
                 }
             } else if (editing) {
+                // if we're editing, move the cursor over the current character
                 move(cursor - top + ((select_x+edit_col - chars_fit + (COLS))/COLS),
                     (2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + edit_col) % COLS);
             }
             attrset(COLOR_PAIR(0));
             
+            // don't skip getch() next time
             skip = false;
         }
         
+        // get the highlighted node, so we can tell if there's an end tag
+        // and highlight it too
         highlighted = xmldoc.editor_lines[cursor].node;
         
+        // keep the cursor within bounds
         if (cursor < 0) cursor = 0;
         if (cursor >= (int)xmldoc.editor_lines.size()) cursor = xmldoc.editor_lines.size()-1;
         
+        // scroll the visible portion of the sceren
+        // make sure the cursor is at least 1/3 from the top or bottom
+        // of the screen, this makes the viewing area pleasant
         while (cursor < top+(LINES/3)) top--;
         if (top < 0) top = 0;
-        while (cursor > top+(LINES/3)*2) {
-            /*if (!xmldoc.editor_lines[top].expanded) {
-                top += xmldoc.editor_lines[top].child_lines;
-            }*/
-            top++;
-        }
+        while (cursor > top+(LINES/3)*2) top++;
         
+        
+        // render the screen
         clear();
-        //int line_num = top;
         for (int y=0; y<LINES-1; y++) {
             int line_num = top+y;
             if (line_num < (int)xmldoc.editor_lines.size()) {
                 if ((line_num == cursor or xmldoc.editor_lines[line_num].node == highlighted)
                     && xmldoc.editor_lines[cursor].selectable) {
-                    //move(y, 1 + xmldoc.editor_lines[y].depth*2);printw("▶");
+                    // highlight the line the cursor is over
                     if (!xmldoc.editor_lines[line_num].highlight) {
                         attrset(COLOR_PAIR(1));
                     } else {
@@ -360,6 +356,9 @@ int main(int argc, char* argv []) {
                     attrset(COLOR_PAIR(4));
                 }
                 move(y, 2 + xmldoc.editor_lines[line_num].depth*2);
+                
+                // calculate how many characters fit; if the line doesn't fit,
+                // show an inverted $ at the endto portray it
                 int chars_fit = COLS - (2 + xmldoc.editor_lines[line_num].depth*2);
                 if ((int)xmldoc.editor_lines[line_num].text.size() > chars_fit) {
                     printw(xmldoc.editor_lines[line_num].text.substr(0, chars_fit-1).c_str());
@@ -369,9 +368,14 @@ int main(int argc, char* argv []) {
                 } else if (xmldoc.editor_lines[line_num].text.size()) {
                     printw(xmldoc.editor_lines[line_num].text.c_str());
                 } else {
+                    // if the line is empty, print a single space to make
+                    // it possible to hover over it anyway
                     printw(" ");
                 }
                 if (line_num == cursor && !xmldoc.editor_lines[cursor].selectable) {
+                    // if the line isn't selectable, print an inverted space at
+                    // the end of it, to visualize the fact that if you
+                    // insert or add a tag, it'll get put after the line
                     attrset(COLOR_PAIR(1));
                     printw(" ");
                 }
@@ -379,38 +383,45 @@ int main(int argc, char* argv []) {
                 
                 if (!xmldoc.editor_lines[line_num].node->expanded
                     && xmldoc.editor_lines[line_num].node->is_expandable()) {
+                    // print an inverted + if the line can be expanded
                     move(y, 1+xmldoc.editor_lines[line_num].depth*2);
                     attrset(COLOR_PAIR(1));
                     printw("+");
                     attrset(COLOR_PAIR(0));
                 }
             } else {
+                // line is beyond the end of the document
                 move(y, 0);
+                // could show a vi-style ~ but decided not to
                 //printw("~");
             }
         }
+        
+        // print the help text at the bottom of the screen
         move(LINES-1, 0);
         printw(" ");
         int i = 0;
         for (auto text : help_text) {
-            //printw(" ");
             attrset(COLOR_PAIR(1));
+            // set the color to green if this help text is to be highlighted
             if (highlight_help_text == i) attrset(COLOR_PAIR(3));
             printw(" ");
+            // print the help string up to -, invert colors after it
+            // (this is done to save screen estate yet make storage convenient)
             for (auto c : string(text)) {
                 if (c != '-') printw(string(1, c).c_str());
                 else attrset(COLOR_PAIR(0));
             }
             printw(" ");
             attrset(COLOR_PAIR(0));
-            //printw(" ");
             i++;
         }
         highlight_help_text = -1;
         move(LINES-1, COLS-1);
         redraw = false;
     }
-          
+    
+    // bye!
     endwin();
     
     return 0;
