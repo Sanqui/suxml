@@ -405,7 +405,7 @@ class XMLTag : public XMLNode {
         }
         
         virtual string to_str(int depth) const {
-            if (!children.size()) {
+            if (!children.size() and !expanded) {
                 return get_start_str();
             } else {
                 string out = "";
