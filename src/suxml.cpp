@@ -1,3 +1,6 @@
+/** \file suxml.cpp
+ *  UI code for suxml, the XML editor
+ *  \author David Labský <labskdav@fit.cvut.cz> */
 #include <cstdio>
 #include <cassert>
 #include <cstdlib>

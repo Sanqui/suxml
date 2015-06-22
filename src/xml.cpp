@@ -1,3 +1,10 @@
+/** \file xml.cpp
+ *  Implementation of XML classes.
+ *  \author David Labský <labskdav@fit.cvut.cz> */
+
+/** \mainpage
+ *  This project implements the representation of a XML document in memory.
+ **/
 #include <cstdio>
 #include <cassert>
 #include <cstdlib>
@@ -26,6 +33,8 @@ using namespace std;
 
 #define DEBUG(...) printf("\x1b[33m[%3d] ", __LINE__); printf(__VA_ARGS__); printf("\x1b[39;49m")
 
+/// Verify whether a string is only whitespace
+/** \return True if string is only whitespace */
 bool is_whitespace(string s) {
     for (char c : s) {
         if (!isspace(c)) return false;
@@ -33,6 +42,8 @@ bool is_whitespace(string s) {
     return true;
 }
 
+/// Check if the string contains a specified character
+/** \return True if one of the chars is present */
 int any_char_in_string(string s, string chars) {
     for (char c : chars) {
         if (s.find(c) != string::npos) return s.find(c);
@@ -42,24 +53,38 @@ int any_char_in_string(string s, string chars) {
 
 class XMLNode;
 
+/// A line of text in the editor
+/** This is a supporting class, the purpose of which is to tie together
+ *  the editor and the XML document.  It exists mainly to speed up rendering.
+ */
 class EditorLine {
     public:
+        /// Whether the line can be selected and interacted with in the editor
         bool selectable;
+        /// How much is the line indented
         int depth;
+        /// The actual contents of the line
         string text;
+        /// The XMLNode this line represents
         XMLNode* node;
-        
+        /// If the line should be highlighted in the editor (e.g. after a search)
         bool highlight;
         
+        /// Constructor with highlight off by default
         EditorLine(bool selectable, int depth, string text, XMLNode* node)
             :selectable(selectable), depth(depth), text(text), node(node) {
             highlight = false;
         };
             
+        /// Constructor with highlight settable
         EditorLine(bool selectable, int depth, string text, XMLNode* node, bool highlight)
             :selectable(selectable), depth(depth), text(text), node(node), highlight(highlight) {};
 };
 
+/// An attribute of an element
+/** Only stores the attribute-value pair at the moment, but an editor supporting
+ *  e.g. namespaces would want to extend this.
+ */
 class XMLAttribute {
     public:
         string attribute;
@@ -68,51 +93,106 @@ class XMLAttribute {
         XMLAttribute(string attribute, string value) : attribute(attribute), value(value) {};
         
         string to_str() const {
-            return "todo=\"todo\"";
+            return attribute+"=\""+value+"\"";
         }
 };
 
+/// Abstract XML node
+/** This abstract class represents a node in the XML tree.  Various operations
+ *  can be performed on a node.
+ */
 class XMLNode {
     public:
+    	/// Implicit constructor
         XMLNode() {};
+    	/// Destructor
         virtual ~XMLNode() {};
         
-        bool expanded = false; // this is internal to the editor
+        /// Whether the node has been visually expanded
+        /** This is internal to the editor; it doesn't affect output. */
+        bool expanded = false;
+        /// Whether the node has been found by the last search
+        /** This is internal to the editor; it doesn't affect output. */
         bool found = false;
         
-        virtual int is_expandable() { return false; }
-        virtual int num_settable() { return 1; }
+        /// Whether it makes sense to expand this node
+        /** In other words, whether this node has (or can have) children */
+	    /** \return True if node is expandable */
+        virtual bool is_expandable() { return false; }
+        /// Sets a part of this node
+        /** The node can have multiple parts; the first parameter specifies
+         *  which part is being set.  The second parameter contains the new
+         *  string.
+         *
+	     *  \return A bool if the set was successful, and an int containing
+	     *  the location of the first error found
+	     */
         virtual pair<bool, int> set(int which, string text) { return make_pair(true, -1); }
+        /// Deletes a part of this node
+	    /** \return True if succesful */
         virtual bool del(int which) { return false; }
+        /// Inserts a new node, propragates
+        /** Attempts to insert new_node into or after node */
+	    /** \return True if succesful */
         virtual bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) { return false; }
+        /// Deletes a node, propagates
+        /** Attempts to delete node */
+	    /** \return True if succesful */
         virtual bool del_node(XMLNode* node) { return false; }
+        /// Finds all elements with the specified name, propagates
+	    /** \return True if found and the parents should expand */
         virtual bool find(string str) {
             expanded = false;
             return false;
         }
+        /// Expands all nodes, propagates
         virtual void expand_all() { expanded = true; }
         
         
+        /// Gets the number of settable parts this node has.
+        /** A settable part is a string which can be edited in the
+         *  editor, e.g. the element name or attributes. */
+	    /** \return Number of settable parts */
+        virtual int num_settable() { return 1; }
+        /// Gets the settable parts this node has.
+        /** A settable part is a string which can be edited in the
+         *  editor, e.g. the element name or attributes. */
+	    /** \return Vector of strings containing the individual parts */
         virtual vector<string> settable_parts() { return vector<string>(); }
         
+        /// Returns a string representation of this node, indented by depth
+	    /** \return String representation of this node */
         virtual string to_str(int depth) const {
             return "";
         }
+        /// Returns a string representation of this node
+	    /** \return String representation of this node */
         string to_str() const {
             return to_str(0);
         }
         
+        /// Gets the settable line
+        /** This method returns the line of this node as it's being edited,
+         *  with the part denoted by select_cursor and the current version
+         *  in edit_buf.
+         *
+	     * \return The generated line and the cursor offset */
         virtual pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
             return make_pair(edit_buf, 0);
         }
         
-        virtual string get_start_str() const { return to_str(); }
+        /// Renders the node as EditorLines into the given vector
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(true, depth, to_str(), this));
         }
     private:
 };
 
+/// XML Content
+/** Represents a piece of text between other XML nodes.
+ *  For convenience while editing, multiple lines of text are split
+ *  into distinct XMLContents during parsing, however this is not necessary.
+ */
 class XMLContent : public XMLNode {
     public:
         XMLContent(string content) : XMLNode(), content(content) {};
@@ -149,6 +229,13 @@ class XMLContent : public XMLNode {
         }
 };
 
+/// XML Tag
+/** Represents a piece of XML tag
+ *  A XML tag has attributes and children.  All of these are stored in the
+ *  object and can be accessed or edited through the means of set(), etc.
+ * 
+ *  Example tags: <br />, <b>hello</b>
+ */
 class XMLTag : public XMLNode {
     public:
         XMLTag() {};
@@ -248,7 +335,10 @@ class XMLTag : public XMLNode {
             return false;
         }
         
-        virtual int is_expandable() { return children.size() >= 1; }
+        bool is_expandable() {
+            return children.size() >= 1; // XXX maybe true always for convenience?
+        }
+        
         int num_settable() {
             //return settable_parts().size();
             return 1 + (attributes.size()*2) + 1;
@@ -265,6 +355,8 @@ class XMLTag : public XMLNode {
             return parts;
         }
         
+        /// Gets the start tag
+        /** \return The start tag string */
         string get_start_str() const {
             string out = "<";
             out += element;
@@ -280,6 +372,8 @@ class XMLTag : public XMLNode {
             return out;
         }
         
+        /// Gets the end tag
+        /** \return The end tag string */
         string get_end_str() const {
             return "</" + element + ">";
         }
@@ -369,6 +463,13 @@ class XMLTag : public XMLNode {
         }
 };
 
+/// XML Declaration
+/** Represents the XML declaration
+ *  According to the specification, a XML document may contain a XML declaration
+ *  at the start.  We respect this, but don't currently expose it.
+ * 
+ *  Example declaration: <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+ */
 class XMLDeclaration : public XMLTag {
     public:
         XMLDeclaration() : XMLTag() {};
@@ -378,6 +479,13 @@ class XMLDeclaration : public XMLTag {
         }
 };
 
+/// XML Comment
+/** Represents a XML comment
+ *  A XML comment can occur at any place inside content.  We expose comments
+ *  and allow them to be edited.
+ * 
+ *  Example comment: <!-- hello! -->
+ */
 class XMLComment : public XMLNode {
     public:
         XMLComment(string comment) : XMLNode(), comment(comment) {};
@@ -404,13 +512,27 @@ class XMLComment : public XMLNode {
         }
 };
 
+/// XML Document
+/** Represents the entire XML document in memory
+ *  
+ */
 class XMLDocument {
     public:
+        /// The XML declaration, if any
         XMLDeclaration declaration;
+        /// The root tag, which is necessary
         XMLTag root;
         
+        /// Constructor
         XMLDocument() {};
         
+        /// Parse the XML document inside the provided document
+        /** When an error is encountered, according to the XML specification,
+         *  no further attempt at parsing should be made.  XMLDocument throws
+         *  an exception with an appropriate message.  Nonetheless, the partial
+         *  document up to the error has been parsed and is available for
+         *  inspection.
+         */
         bool parse(string filename) {
             ifstream fin (filename, ios::in);
             if (!fin.is_open() || !fin.good() || !fin) throw "cannot open file";
@@ -497,19 +619,32 @@ class XMLDocument {
             return true;
         }
         
+        /// Deletes a node
+        /** Attempts to delete node */
+	    /** \return True if succesful */
         bool del_node(XMLNode* node) {
             if (node == &root) return false;
             return root.del_node(node);
         }
         
+        /// Inserts a new node
+        /** Attempts to insert new_node into or after node */
+	    /** \return True if succesful */
         bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
             if (node == &root) return false;
             return root.ins_node(node, force_after, new_node);
         }
         
+        /// Returns a string representation of the XML document
+	    /** \return String representation of the XML document */
         string to_str() const {
             return root.to_str(0);
         }
+        
+        /// Renders the XML document into EditorLines
+        /** This generates a representation of the document,
+         *  respecting things like expanded nodes or searches, for the editor.
+         */
         void render() {
             //root.expanded = true;
             editor_lines.clear();
@@ -517,16 +652,20 @@ class XMLDocument {
             //editor_lines[0].child_lines = 0;
         }
         
+        /// Finds and marks all elements with the specified name
         void find(string str) {
             root.find(str);
         }
         
+        /// Expands all nodes
         void expand_all() {
             root.expand_all();
         }
         
+        /// The last parsed line, for convenience in reporting errors
         int last_parsed_line = 0;
         
+        /// The lines of the editor
         vector<EditorLine> editor_lines;
     private:
         ifstream* in;

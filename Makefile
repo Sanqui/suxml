@@ -6,6 +6,8 @@ compile:
 run:
 	./bin/suxml
 clean:
-	rm /bin/suxml
+	rm bin/suxml
+doc:
+	cd src && doxygen && mv html ../doc && cd -
 
 all: compile doc
