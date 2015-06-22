@@ -488,7 +488,7 @@ class XMLTag : public XMLNode {
         }
         
         void expand_all() {
-            expanded = true;
+            if (children.size()) expanded = true;
             for (auto& child : children) {
                 child->expand_all();
             }
@@ -497,6 +497,7 @@ class XMLTag : public XMLNode {
 
 /// XML Declaration
 /** Represents the XML declaration
+ *
  *  According to the specification, a XML document may contain a XML declaration
  *  at the start.  We expose this, but do not allow it to be edited
  *  (it wouldn't make sense).
@@ -525,6 +526,53 @@ class XMLDeclaration : public XMLNode {
         
         virtual void render_into(vector<EditorLine>* lines, int depth) {
             lines->push_back(EditorLine(false, depth, to_str(0), this));
+        }
+};
+
+/// XML Doctype
+/** Represents the XML doctype
+ *
+ *  There are a few restrictions on the doctype we don't validate right now...
+ *
+ *  Example doctype: &lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ * "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+ */
+class XMLDoctype : public XMLNode {
+    public:
+        XMLDoctype() : XMLNode() {};
+        
+        /// Contents of this doctype
+        string text;
+        
+        pair<bool, int> set(int which, string text_) {
+            // we only have one settable thing
+            assert (which == 0);
+            int invalid = any_char_in_string(text_, ">");
+            if (invalid != -1) return make_pair(false, invalid);
+            text = text_;
+            return make_pair(true, -1);
+        }
+        
+        vector<string> settable_parts() {
+            vector<string> parts = vector<string>();
+            // only the content is settable
+            string s = text;
+            replace(s.begin(), s.end(), '\n', ' ');
+            parts.push_back(s);
+            return parts;
+        }
+        pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
+            return make_pair("<!DOCTYPE "+edit_buf+">", 10);
+        }
+        
+        string to_str(int depth) const {
+            return "<!DOCTYPE "+text+">";
+        }
+        
+        virtual void render_into(vector<EditorLine>* lines, int depth) {
+            string s = to_str(0);
+            replace(s.begin(), s.end(), '\n', ' ');
+            lines->push_back(EditorLine(true, depth, s, this));
         }
 };
 
@@ -575,6 +623,12 @@ class XMLDocument {
         bool have_declaration;
         /// The XML declaration, if any
         XMLDeclaration declaration;
+        
+        /// Whether the document has a doctype
+        bool have_doctype;
+        /// The XML doctype, if any
+        XMLDoctype doctype;
+        
         /// The root tag, which is necessary
         XMLTag root;
         
@@ -610,7 +664,18 @@ class XMLDocument {
                 if (c != '?') throw "invalid declaration";
                 READ_CHAR();
                 if (c != '>') throw "invalid declaration";
-                if (!is_whitespace(read_string_until("<"))) throw "content between root tag and declaration";
+                if (!is_whitespace(read_string_until("<"))) throw "content between declaration and doctype or root tag";
+            } else {
+                UNREAD();
+            }
+            READ_CHAR();
+            if (c == '!') {
+                // this might be a DOCTYPE
+                string name = read_string_until(WHITESPACE);
+                if (name != "DOCTYPE") throw "invalid root tag starting with !";
+                have_doctype = true;
+                doctype.text = read_string_until(">");
+                if (!is_whitespace(read_string_until("<"))) throw "content between doctype and root tag";
             } else {
                 UNREAD();
             }
@@ -712,8 +777,8 @@ class XMLDocument {
         }
         
         /// Returns a string representation of the XML document
-        /*  suxml has a particular idea about how whitespace is used in XML.
-         *  this results in monolithic output, but doesn't preserve some
+        /** suxml has a particular idea about how whitespace is used in XML.
+         *  This results in monolithic output, but doesn't preserve some
          *  user whitespace.  In most cases, this is acceptable, because
          *  consecutive whitespace doesn't convey extra meaning.
          *
@@ -722,6 +787,9 @@ class XMLDocument {
             string out = "";
             if (have_declaration) {
                 out += declaration.to_str(0)+"\n";
+            }
+            if (have_doctype) {
+                out += doctype.to_str(0)+"\n";
             }
             return out+root.to_str(0);
         }
@@ -734,6 +802,9 @@ class XMLDocument {
             editor_lines.clear();
             if (have_declaration) {
                 declaration.render_into(&editor_lines, 0);
+            }
+            if (have_doctype) {
+                doctype.render_into(&editor_lines, 0);
             }
             root.render_into(&editor_lines, 0);
         }
@@ -796,7 +867,7 @@ class XMLDocument {
                 UNREAD();
                 string name = read_string_until(WHITESPACE "=");
                 if (c != '=') throw "attribute lacks value";
-                READ_CHAR();
+                read_whitespace();
                 if (c != '"' and c != '\'') throw "attribute value not in quotes";
                 string value = read_string_until(string(1, c));
                 attributes.push_back(XMLAttribute(name, value));
