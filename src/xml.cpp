@@ -188,7 +188,9 @@ class XMLContent : public XMLNode {
         string content;
         
         pair<bool, int> set(int which, string text) {
-            assert (which == 0);
+            // set the content text
+            assert (which == 0); // we only have one settable thing
+            // no < allowed
             int invalid = any_char_in_string(text, "<");
             if (invalid != -1) return make_pair(false, invalid);
             content = text;
@@ -196,6 +198,7 @@ class XMLContent : public XMLNode {
         }
         
         bool del(int which) {
+            // simply delete our content
             assert (which == 0);
             content = "";
             return true;
@@ -213,6 +216,9 @@ class XMLContent : public XMLNode {
         
         void render_into(vector<EditorLine>* lines, int depth) {
             string s = to_str(0);
+            // this isn't necessary, because while parsing,
+            // we already split newlines into different XMLContents -
+            // but just in case one sneaks in there.
             replace(s.begin(), s.end(), '\n', ' ');
             lines->push_back(EditorLine(true, depth, s, this));
         }
@@ -236,58 +242,80 @@ class XMLTag : public XMLNode {
         }
         
         string element;
+        /// The attributes on the element
         vector<XMLAttribute> attributes;
+        /// Child nodes of this tag
         vector<XMLNode*> children;
         
         pair<bool, int> set(int which, string text) {
             found = false;
             which--;
             if (which == -1) {
+                // we're setting the element name.
+                // cannot be empty
                 if (text.size() == 0) return make_pair(false, -1);
+                // first character cannot be invalid, there are specific chars
+                // which can't be the first characters of the element name
                 char c = text[0];
                 for (char invalid_char : INVALID_ELEMENT_FIRST_CHARS) {
                     if (c == invalid_char) return make_pair(false, 0);
                 }
+                // any other character cannot be invalid either
                 int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                 if (invalid != -1) return make_pair(false, invalid);
+                
                 element = text;
             }
             else if (which/2 < (int)attributes.size()) {
                 if (which % 2 == 0) {
+                    // if even, we're setting the attribute
                     if (text.size() == 0) return make_pair(false, -1);
                     int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                     if (invalid != -1) return make_pair(false, invalid);
+                    
                     attributes[which/2].attribute = text;
                 }
                 else {
+                    // odd, so we're setting the value.  the value doesn't
+                    // have any restrictions except for ", since it's quoted
                     int invalid = any_char_in_string(text, "\"");
                     if (invalid != -1) return make_pair(false, invalid);
+                    
                     attributes[which/2].value = text;
                 }
             } else {
+                // this is a new attribute, create it with an empty value
                 if (text.size() == 0) return make_pair(true, -1);
                 int invalid = any_char_in_string(text, WHITESPACE INVALID_ELEMENT_CHARS ">/");
                 if (invalid != -1) return make_pair(false, invalid);
                 attributes.push_back(XMLAttribute(text, ""));
             }
+            // we did it!
             return make_pair(true, -1);
         }
         
         bool del(int which) {
             which--;
+            // nope, we can't delete the element name
             if (which == -1) return false;
             if (which/2 < (int)attributes.size()) {
                 if (which % 2 == 0) {
+                    // delete the attribute
                     attributes.erase(attributes.begin() + which/2);
                 } else {
+                    // delete the attribute's value
                     attributes[which/2].value = "";
                 }
                 return true;
             }
+            // probably an attempt to delete a nonexistant attribute - fail
             return false;
         }
         
         bool del_node(XMLNode* node) {
+            // simply delete the node if it's our child, otherwise
+            // propagate into other children
+            // (depth first)
             int i = 0;
             for (auto i_node : children) {
                 if (node == &*i_node) {
@@ -301,10 +329,15 @@ class XMLTag : public XMLNode {
             return false;
         }
         bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
+            // there are two modes to insert nodes -- we usually want to
+            // insert the new node after the selected one, unless it's
+            // the start tag line
             if (node == this && !force_after) {
+                // simply insert the new node if it's us
                 children.insert(children.begin(), new_node);
                 return true;
             }
+            // depth first insertion of new_node after node
             int i = 0;
             for (auto i_node : children) {
                 if (node == &*i_node) {
@@ -321,26 +354,33 @@ class XMLTag : public XMLNode {
                 }
                 i++;
             }
+            // it wasn't inserted by us
             return false;
         }
         
         bool is_expandable() {
-            return children.size() >= 1; // XXX maybe true always for convenience?
+            // don't claim to be expandable if we don't have children
+            // (we actually can be expanded, but it's cleaner not to
+            // visualize it)
+            return children.size() >= 1;
         }
         
         int num_settable() {
-            //return settable_parts().size();
+            // the length settable_parts() returns
             return 1 + (attributes.size()*2) + 1;
         }
         
         vector<string> settable_parts() {
             vector<string> parts = vector<string>();
+            // element name
             parts.push_back(element);
+            // attribute names and values
             for (XMLAttribute attr : attributes) {
                 parts.push_back(attr.attribute);
                 parts.push_back(attr.value);
             }
-            parts.push_back(""); // dummy new attribute
+            // dummy new attribute
+            parts.push_back("");
             return parts;
         }
         
@@ -373,6 +413,7 @@ class XMLTag : public XMLNode {
             } else {
                 string out = "";
                 out += get_start_str();
+                // we let the children to_str() too
                 for (auto child_p : children) {
                     string child_str = (*child_p).to_str(depth+1);
                     if (!is_whitespace(child_str)) {
@@ -389,15 +430,15 @@ class XMLTag : public XMLNode {
         }
         
         void render_into(vector<EditorLine>* lines, int depth) {
-            //int start_line = lines->size();
             if (expanded) { // and children.size()
                 lines->push_back(EditorLine(true, depth, get_start_str(), this, found));
                 for (auto& child : children) {
                     child->render_into(lines, depth+1);
                 }
                 lines->push_back(EditorLine(false, depth, get_end_str(), this, found));
-                //(*lines)[start_line].child_lines = lines->size()-start_line-1;
             } else if (children.size()) {
+                // we have children which will be shown if expanded - convey
+                // this with ...
                 lines->push_back(EditorLine(true, depth, get_start_str()+" ...", this, found));
             } else {
                 lines->push_back(EditorLine(true, depth, get_start_str(), this, found));
@@ -405,6 +446,8 @@ class XMLTag : public XMLNode {
         }
         
         pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
+            // the reason this looks the way it does is so we can
+            // easily get the select_x value (offset from left)
             int i=0;
             int select_x = 0;
             string line = "";
@@ -415,7 +458,6 @@ class XMLTag : public XMLNode {
                 if (i == select_cursor) {
                     select_x = line.length();
                     line += edit_buf;
-                    //select_part = part;
                 } else {
                     line += part;
                 }
@@ -428,16 +470,20 @@ class XMLTag : public XMLNode {
         }
         
         bool find(string str) {
+            // we're not expanded by default
             expanded = false;
             for (auto& child : children) {
                 if (child->find(str)) {
+                    // some of our children or grand-children (...) matched,
+                    // so expand us
                     expanded = true;
-                    //return true;
                 }
             }
             if (element == str) {
+                // it's us!
                 found = true;
                 expanded = true;
+                // tell (grand...)parents to expand
                 return true;
             }
             if (expanded) return true; // found in a child
@@ -479,16 +525,20 @@ class XMLComment : public XMLNode {
     public:
         XMLComment(string comment) : XMLNode(), comment(comment) {};
         
+        /// The text of the comment
         string comment;
         
         pair<bool, int> set(int which, string text) {
+            // we only have one settable thing
             assert (which == 0);
+            // TODO no -- can be present
             comment = text;
             return make_pair(true, -1);
         }
         
         vector<string> settable_parts() {
             vector<string> parts = vector<string>();
+            // only the comment is settable
             parts.push_back(comment);
             return parts;
         }
@@ -497,7 +547,7 @@ class XMLComment : public XMLNode {
         }
         
         string to_str(int depth) const {
-            return "<!--"+comment+"-->";
+            return string(depth, '\t')+"<!--"+comment+"-->";
         }
 };
 
@@ -527,8 +577,10 @@ class XMLDocument {
             if (!fin.is_open() || !fin.good() || !fin) throw "cannot open file";
             in = &fin;
             
+            // the tag stack as we work ourselves through the tree
             vector<XMLTag*> tag_stack;
             
+            // no content can be present before the roo tag
             if (!is_whitespace(read_string_until("<"))) throw "content before root tag";
             string element_name = read_string_until(WHITESPACE ">");
             UNREAD();
@@ -546,6 +598,7 @@ class XMLDocument {
             while (tag_stack.size()) {
                 read_whitespace();
                 UNREAD();
+                // read any content between tags
                 while (true) {
                     string content = read_string_until("\n<");
                     content.erase(content.find_last_not_of(WHITESPACE)+1);
@@ -556,13 +609,14 @@ class XMLDocument {
                     read_whitespace();
                     UNREAD();
                 }
+                // inside a tag
                 READ_CHAR();
                 if (c == '!') {
                     for (int i=0; i < 2; i++) {
                         READ_CHAR();
                         if (c != '-') throw "errornous tag starting with !";
                     }
-                    // comment
+                    // this is a comment
                     string comment_text = "";
                     while (true) {
                         comment_text += read_string_until("-");
@@ -575,12 +629,14 @@ class XMLDocument {
                     if (c != '>') throw "errornous comment, contains --";
                     tag_stack.back()->children.push_back(new XMLComment(comment_text));
                 } else if (c == '/') {
+                    // this is an end tag
                     element_name = read_string_until(">");
                     if (element_name != tag_stack.back()->element) {
                         throw "mismatched end tag";
                     }
                     tag_stack.pop_back();
                 } else {
+                    // this is a regular element
                     for (char invalid_char : INVALID_ELEMENT_FIRST_CHARS) {
                         if (c == invalid_char) throw "invalid first character of element name";
                     }
@@ -590,21 +646,25 @@ class XMLDocument {
                         if (c == invalid_char) throw "invalid character in element name";
                     }
                     UNREAD();
+                    
                     XMLTag* tag_p = new XMLTag(element_name);
                     tag_p->attributes = read_attributes();
                     tag_stack.back()->children.push_back(tag_p);
                     if (c == '>') {
                         tag_stack.push_back(tag_p);
                     } else if (c == '/') {
+                        // this is an empty-element tag, no need to push it
+                        // down the stack
                         READ_CHAR();
                         if (c != '>') throw "characters after / in empty-element tag";
                     }
                 }
             }
             read_whitespace(true);
+            // there must not be anything else besides the root tag
             if (!in->eof()) throw "root tag isn't alone";
             
-            
+            // we parsed it!
             return true;
         }
         
@@ -612,6 +672,7 @@ class XMLDocument {
         /** Attempts to delete node */
 	    /** \return True if succesful */
         bool del_node(XMLNode* node) {
+            // can't delete the root node...
             if (node == &root) return false;
             return root.del_node(node);
         }
@@ -620,12 +681,18 @@ class XMLDocument {
         /** Attempts to insert new_node into or after node */
 	    /** \return True if succesful */
         bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
-            if (node == &root) return false;
+            // can't insert anything after the root node...
+            if (node == &root && force_after) return false;
             return root.ins_node(node, force_after, new_node);
         }
         
         /// Returns a string representation of the XML document
-	    /** \return String representation of the XML document */
+        /*  suxml has a particular idea about how whitespace is used in XML.
+         *  this results in monolithic output, but doesn't preserve some
+         *  user whitespace.  In most cases, this is acceptable, because
+         *  consecutive whitespace doesn't convey extra meaning.
+         *
+	     *  \return String representation of the XML document */
         string to_str() const {
             return root.to_str(0);
         }
@@ -635,10 +702,8 @@ class XMLDocument {
          *  respecting things like expanded nodes or searches, for the editor.
          */
         void render() {
-            //root.expanded = true;
             editor_lines.clear();
             root.render_into(&editor_lines, 0);
-            //editor_lines[0].child_lines = 0;
         }
         
         /// Finds and marks all elements with the specified name
