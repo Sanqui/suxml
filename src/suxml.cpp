@@ -4,6 +4,39 @@
  
 /** \mainpage
  *  This is a simple and opinionated interactive xml editor using ncurses.
+ * 
+ * It was written in 2015 as semestral work for the subject BI-PA2.  You can read
+ * the original assignment (in Czech) in the file zadani.txt.
+ * 
+ * Despite being written hastily over the course of a single weekend, I'm still
+ * quite proud of it.  I didn't like the assignment, mostly because I often claim
+ * to dislike XML itself - but it's not quite true.  I actually sort of like XML.
+ * What I dislike is how it tends to be used - that is, for structured data,
+ * where JSON or YAML fit the bill better, as opposed to simple markup of text.
+ * 
+ * Hence suxml's opinionated attitude.  suxml has a solid idea of how it wants
+ * XML to look, and it won't let you break out of it.  This is a blessing and a
+ * curse: in many cases, a XML file will be difficult or outright impossible
+ * to edit sanely in suxml.  But if you hit the certain class of XML documents
+ * suxml is fit for - you'll find it very useful and easy to use.
+ * 
+ * \section features Features
+ * suxml has numerous features:
+ * \li Interactive and intuitive visual editor
+ * \li Automatic reformatting
+ * \li Insertion of new tags, text snippets, and comments
+ * \li Editing and insertion of new attributes
+ * \li Understands doctype and xml specifications
+ * \li Simple find feature
+ *
+ * \section structure Structure
+ * There are two source files, `suxml.cpp` and `xml.cpp`.  The former contains
+ * the editor code (using ncurses) and the latter contains the classes for
+ * parsing, modifying, and outputting XML.
+ * 
+ * \section lib Usage as a library
+ * I suppose xml could be used as a library without the UI cludge of suxml.  I
+ * would certainly recommend against it though.
  **/
  
 #include <cstdio>
@@ -76,7 +109,7 @@ int main(int argc, char* argv []) {
     
     // Error out if we don't get a file
     if (filename == NULL) {
-        printf("Usage: %s file.xml\nSee `man suxml` for details", argv[0]);
+        printf("Usage: %s file.xml\nSee `man suxml` for details\n", argv[0]);
         return 0;
     }
     

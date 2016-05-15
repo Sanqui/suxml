@@ -25,6 +25,18 @@ curse: in many cases, a XML file will be difficult or outright impossible
 to edit sanely in suxml.  But if you hit the certain class of XML documents
 suxml is fit for - you'll find it very useful and easy to use.
 
+Features
+========
+
+suxml has numerous features:
+* Interactive and intuitive visual editor
+* Automatic reformatting
+* Insertion of new tags, text snippets, and comments
+* Editing and insertion of new attributes
+* Understands doctype and xml specifications
+* Simple find feature
+
+
 Build instructions
 ==================
 
