@@ -12,9 +12,9 @@ run:
 clean:
 	rm -rf ${NAME} doc/
 doc:
-	cd src && doxygen && mv html ../doc && cd -
+	doxygen && mv html doc
 install:
 	cp $(NAME) $(INSTALL_PATH)/bin
-	cp man/suxml.1 $(INSTALL_PATH)/share/man/man1
+	cp suxml.1 $(INSTALL_PATH)/share/man/man1
 
 all: compile doc

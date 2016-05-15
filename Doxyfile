@@ -3,3 +3,4 @@ PROJECT_BRIEF  = "XML editor (FIT BI-PA2 semestral work 2015)"
 GENERATE_LATEX = NO
 HAVE_DOT       = YES
 UML_LOOK       = YES
+INPUT          = src/
