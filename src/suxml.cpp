@@ -46,9 +46,12 @@ bool ask(const char* question) {
 int main(int argc, char* argv []) {
     char* filename = NULL;
     bool light = false;
+    bool newline = true;
     for (int i=1; i<argc; i++) {
         if (strcmp(argv[i], "--light") == 0) {
             light = true;
+        } else if (strcmp(argv[i], "-L") == 0) {
+            newline = false;
         } else {
             filename = argv[i];
         }
@@ -159,7 +162,7 @@ int main(int argc, char* argv []) {
                     if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
                         throw "failed to write";
                     }
-                    fout << xmldoc.to_str();
+                    fout << xmldoc.to_str(newline);
                     fout.close();
                     highlight_help_text = 1;
                 }

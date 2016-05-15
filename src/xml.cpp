@@ -797,9 +797,11 @@ class XMLDocument {
          *  This results in monolithic output, but doesn't preserve some
          *  user whitespace.  In most cases, this is acceptable, because
          *  consecutive whitespace doesn't convey extra meaning.
+         *  The newline parameter specifies whether to include a stray
+         *  newline at the end of the document.
          *
 	     *  \return String representation of the XML document */
-        string to_str() const {
+        string to_str(bool newline) const {
             string out = "";
             if (have_declaration) {
                 out += declaration.to_str(0)+"\n";
@@ -807,7 +809,11 @@ class XMLDocument {
             if (have_doctype) {
                 out += doctype.to_str(0)+"\n";
             }
-            return out+root.to_str(0);
+            
+            string nl = "";
+            if (newline) nl = "\n";
+            
+            return out+root.to_str(0) + nl;
         }
         
         /// Renders the XML document into EditorLines

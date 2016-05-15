@@ -9,13 +9,39 @@
 .Sh SYNOPSIS
 .Nm suxml
 .Op Fl -light
+.Op Fl L
 .Ar file
+
 .Sh DESCRIPTION
 .Nm
 is a simple yet usable, opinionated XML editor.
-Its arguments are as follows:
+Its arguments are as follows.
+
+.Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl -light
 Invert the color scheme into black on white text.
+.It Fl L
+Do not include newline at the end of the file (for compatibility)
 .It Ar file
 The XML file to edit.
+
+.Sh AVAILABILITY
+.Nm
+should work on any system with a C++ compiler and the ncurses library.  It was
+only tested on Linux, however.
+
+.Sh EXAMPLES
+It is simple to edit a XML file:
+.Pp
+.D1 $ suxml file.xml
+.Pp
+
+.Sh AUTHOR
+.Nm
+was written by David "Sanky" Labský <labskdav@fit.cvut.cz>
+
+.Sh HISTORY
+.Nm
+was written in 2015 as a school assignment.  In 2016 it was revived to serve
+as an example for the subject of technical documentation.
