@@ -63,6 +63,7 @@ class EditorLine {
         };
             
         /// Constructor with highlight settable
+        /** For details about parameters, see this class. */
         EditorLine(bool selectable, int depth, string text, XMLNode* node, bool highlight)
             :selectable(selectable), depth(depth), text(text), node(node), highlight(highlight) {};
 };
@@ -110,22 +111,31 @@ class XMLNode {
          *  which part is being set.  The second parameter contains the new
          *  string.
          *
+         *  \param which Which part to set
+         *  \param text The text to set the part to
+         *
 	     *  \return A bool if the set was successful, and an int containing
 	     *  the location of the first error found
 	     */
         virtual pair<bool, int> set(int which, string text) { return make_pair(true, -1); }
         /// Deletes a part of this node
+        /** \param which The part of this node to delete */
 	    /** \return True if succesful */
         virtual bool del(int which) { return false; }
         /// Inserts a new node, propragates
         /** Attempts to insert new_node into or after node */
+	    /** \param node The node to work with
+	      * \param force_after Whether to put the node after the current node
+	      * \param new_node The new node to be inserted */
 	    /** \return True if succesful */
         virtual bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) { return false; }
         /// Deletes a node, propagates
         /** Attempts to delete node */
+        /** \param node The node to delete */
 	    /** \return True if succesful */
         virtual bool del_node(XMLNode* node) { return false; }
         /// Finds all elements with the specified name, propagates
+        /** \param str The name to match */
 	    /** \return True if found and the parents should expand */
         virtual bool find(string str) {
             expanded = false;
@@ -147,6 +157,7 @@ class XMLNode {
         virtual vector<string> settable_parts() { return vector<string>(); }
         
         /// Returns a string representation of this node, indented by depth
+        /** \param depth How much to indent */
 	    /** \return String representation of this node */
         virtual string to_str(int depth) const {
             return "";
@@ -161,6 +172,9 @@ class XMLNode {
         /** This method returns the line of this node as it's being edited,
          *  with the part denoted by select_cursor and the current version
          *  in edit_buf.
+         *
+         * \param select_cursor The part of the line to edit
+         * \param edit_buf The current line contents
          *
 	     * \return The generated line and the cursor offset */
         virtual pair<string, int> get_settable_line(int select_cursor, string edit_buf) {
@@ -644,6 +658,8 @@ class XMLDocument {
          *  an exception with an appropriate message.  Nonetheless, the partial
          *  document up to the error has been parsed and is available for
          *  inspection.
+         *  
+         * \param filename The filename to open
          */
         bool parse(string filename) {
             ifstream fin (filename, ios::in);
@@ -770,7 +786,8 @@ class XMLDocument {
         
         /// Deletes a node
         /** Attempts to delete node */
-	    /** \return True if succesful */
+	    /** \param node The node to delete
+          * \return True if succesful  */
         bool del_node(XMLNode* node) {
             // can't delete the root node...
             if (node == &root) return false;
@@ -779,6 +796,9 @@ class XMLDocument {
         
         /// Inserts a new node
         /** Attempts to insert new_node into or after node */
+	    /** \param node The node to work with
+	      * \param force_after Whether to put the node after the current node
+	      * \param new_node The new node to be inserted */
 	    /** \return True if succesful */
         bool ins_node(XMLNode* node, bool force_after, XMLNode* new_node) {
             // can't insert anything after the root node...
@@ -799,6 +819,9 @@ class XMLDocument {
          *  consecutive whitespace doesn't convey extra meaning.
          *  The newline parameter specifies whether to include a stray
          *  newline at the end of the document.
+         *
+         *  \param newline Whether to insert a stray newline at the end of
+         *      the document
          *
 	     *  \return String representation of the XML document */
         string to_str(bool newline) const {

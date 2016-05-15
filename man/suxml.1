@@ -10,6 +10,8 @@
 .Nm suxml
 .Op Fl -light
 .Op Fl L
+.Op Fl P
+.Op Fl O Ar output_file
 .Ar file
 
 .Sh DESCRIPTION
@@ -22,7 +24,12 @@ Its arguments are as follows.
 .It Fl -light
 Invert the color scheme into black on white text.
 .It Fl L
-Do not include newline at the end of the file (for compatibility)
+Do not include newline at the end of the file (for compatibility).
+.It Fl P
+Do not open the editor, only pass through the file.  suxml will reformat the
+file, like a linter would.
+.It Fl O Ar output_file
+A different file to output to
 .It Ar file
 The XML file to edit.
 
@@ -37,9 +44,34 @@ It is simple to edit a XML file:
 .D1 $ suxml file.xml
 .Pp
 
+Maybe you prefer a light color scheme:
+.Pp
+.D1 $ suxml --light another_file.xml
+.Pp
+
+It's also possible to output to a different file, without a newline at the
+end of the file:
+.Pp
+.D1 $ suxml -L -O mine/output.xml foreign/file.xml
+.Pp
+
+suxml can also be easily used as a linter, reformatting to its preferred format,
+without opening the editor:
+.Pp
+.D1 $ suxml -P -O clean.xml dirty.xml
+.Pp
+
+.Sh BUGS
+.Nm
+currently has problems with XML structures nested too deep (i.e., wider than the terminal window).
+
 .Sh AUTHOR
 .Nm
 was written by David "Sanky" Labský <labskdav@fit.cvut.cz>
+
+.Sh COPYRIGHT
+.Nm
+is distributed under the MIT license.  See LICENSE for details.
 
 .Sh HISTORY
 .Nm

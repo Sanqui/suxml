@@ -1,3 +1,11 @@
 To build suxml, run `make && sudo make install`.
 
+You can change a few variables in the Makefile:
+
+ * NAME is the name of the program, suxml by default.
+ * CC is the C++ compiler used, g++ by default, though clang++
+   is also available.
+ * INSTALL_PATH is the path to use when doing `make install`.
+   /usr/local by default.
+
 To build the Doxygen documentation, run `make doc`.

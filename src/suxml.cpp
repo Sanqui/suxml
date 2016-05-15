@@ -45,56 +45,79 @@ bool ask(const char* question) {
 
 int main(int argc, char* argv []) {
     char* filename = NULL;
+    char* output_filename = NULL;
     bool light = false;
     bool newline = true;
+    bool reading_output_filename = false;
+    bool pass = false;
     for (int i=1; i<argc; i++) {
         if (strcmp(argv[i], "--light") == 0) {
             light = true;
         } else if (strcmp(argv[i], "-L") == 0) {
             newline = false;
+        } else if (strcmp(argv[i], "-O") == 0) {
+            reading_output_filename = true;
+        } else if (strcmp(argv[i], "-P") == 0) {
+            pass = true;
         } else {
-            filename = argv[i];
+            if (reading_output_filename) {
+                output_filename = argv[i];
+                reading_output_filename = false;
+            } else {
+                filename = argv[i];
+            }
         }
+    }
+    
+    if (reading_output_filename) {
+        printf("-O needs a parameter\n");
+        return 0;
     }
     
     // Error out if we don't get a file
     if (filename == NULL) {
-        printf("usage: %s file.xml\n", argv[0]);
+        printf("Usage: %s file.xml\nSee `man suxml` for details", argv[0]);
         return 0;
     }
-    // Setup ncurses stuff
-    initscr();
-    clear();
-    keypad(stdscr, TRUE); // to make some more keys work
-    ESCDELAY = 25; // to make ESC near-instant
     
-    // set a few colors we'll be using
-    start_color();
+    if (output_filename == NULL) output_filename = filename;
     
-    if (!light) {
-        init_pair(10, COLOR_WHITE,     COLOR_BLACK);
-        init_pair(1, COLOR_BLACK,     COLOR_WHITE);
-        init_pair(2, COLOR_BLACK,     COLOR_RED);
-        init_pair(3, COLOR_BLACK,     COLOR_GREEN);
-        init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
-        init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
-        init_pair(6, COLOR_RED,       COLOR_BLACK);
-    } else {
-        init_pair(10, COLOR_BLACK,     COLOR_WHITE);
-        init_pair(1, COLOR_WHITE,     COLOR_BLACK);
-        init_pair(2, COLOR_BLACK,     COLOR_RED);
-        init_pair(3, COLOR_BLACK,     COLOR_GREEN);
-        init_pair(4, COLOR_BLACK,     COLOR_YELLOW);
-        init_pair(5, COLOR_YELLOW,    COLOR_BLACK);
-        init_pair(6, COLOR_RED,       COLOR_WHITE);
+    if (!pass) {
+        
+        // Setup ncurses stuff
+        initscr();
+        clear();
+        keypad(stdscr, TRUE); // to make some more keys work
+        ESCDELAY = 25; // to make ESC near-instant
+        
+        // set a few colors we'll be using
+        start_color();
+        
+        if (!light) {
+            init_pair(10, COLOR_WHITE,     COLOR_BLACK);
+            init_pair(1, COLOR_BLACK,     COLOR_WHITE);
+            init_pair(2, COLOR_BLACK,     COLOR_RED);
+            init_pair(3, COLOR_BLACK,     COLOR_GREEN);
+            init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
+            init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
+            init_pair(6, COLOR_RED,       COLOR_BLACK);
+        } else {
+            init_pair(10, COLOR_BLACK,     COLOR_WHITE);
+            init_pair(1, COLOR_WHITE,     COLOR_BLACK);
+            init_pair(2, COLOR_BLACK,     COLOR_RED);
+            init_pair(3, COLOR_BLACK,     COLOR_GREEN);
+            init_pair(4, COLOR_BLACK,     COLOR_YELLOW);
+            init_pair(5, COLOR_YELLOW,    COLOR_BLACK);
+            init_pair(6, COLOR_RED,       COLOR_WHITE);
+        }
+        bkgdset(COLOR_PAIR(10));
+        
+        // Display the pretty suxml banner I spent like a minute on
+        attrset(COLOR_PAIR(10));
+        printw(SUXML_BANNER);
+    
+        printw("Parsing file %s...\n", filename);
     }
-    bkgdset(COLOR_PAIR(10));
-    
-    // Display the pretty suxml banner I spent like a minute on
-    attrset(COLOR_PAIR(10));
-    printw(SUXML_BANNER);
-    
-    printw("Parsing file %s...\n", filename);
     // Attempt to parse the file
     XMLDocument xmldoc = XMLDocument();
     string error = "";
@@ -108,19 +131,43 @@ int main(int argc, char* argv []) {
     
     // Report an error if one occurred
     if (error.length() == 0) {
-        printw("File parsed successfully\n");
+        if (!pass) printw("File parsed successfully\n");
+        
+        if (pass) {
+            ofstream fout (output_filename, ios::out);
+            if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
+                throw "failed to write";
+            }
+            fout << xmldoc.to_str(newline);
+            fout.close();
+            exit(0);
+        }
+        
     } else if (error == "cannot open file") {
-        printw("File doesn't exist and will be created when saving.\n");
+        if (!pass) {
+            printw("File doesn't exist and will be created when saving.\n");
+        } else {
+            printf("File doesn't exist.\n");
+            exit(1);
+        }
     } else {
-        attrset(COLOR_PAIR(6));
-        printw("Error while parsing:");
-        attrset(COLOR_PAIR(10));
-        printw(" line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
-        printw("\n");
-        printw("Error encountered while parsing.\n");
-        printw("suxml will edit the partial file.\n");
+        if (!pass) {
+            attrset(COLOR_PAIR(6));
+            printw("Error while parsing:");
+            attrset(COLOR_PAIR(10));
+            printw(" line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
+            printw("\n");
+            printw("Error encountered while parsing.\n");
+            printw("suxml will edit the partial file.\n");
+        } else {
+            printf("Error while parsing:");
+            printf(" line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
+            printf("File not changed.\n");
+            return 1;
+        }
     }
     // Wait for the user
+    
     getch();
     clear();
     
@@ -158,7 +205,7 @@ int main(int argc, char* argv []) {
                 if (ask("Really quit?")) break;
             } else if (command == 'w') { // WRITE
                 if (ask("Save?")) {
-                    ofstream fout (filename, ios::out);
+                    ofstream fout (output_filename, ios::out);
                     if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
                         throw "failed to write";
                     }
