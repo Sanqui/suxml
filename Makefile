@@ -1,7 +1,7 @@
 NAME := suxml
 
-CC := g++
-#CC := clang++
+#CC := g++
+CC := clang++
 
 INSTALL_PATH := /usr/local
 
@@ -15,5 +15,6 @@ doc:
 	cd src && doxygen && mv html ../doc && cd -
 install:
 	cp suxml $(INSTALL_PATH)/bin
+	cp man/suxml.1 $(INSTALL_PATH)/share/man/man1
 
 all: compile doc

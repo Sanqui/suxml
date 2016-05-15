@@ -44,9 +44,18 @@ bool ask(const char* question) {
 }
 
 int main(int argc, char* argv []) {
+    char* filename = NULL;
+    bool light = false;
+    for (int i=1; i<argc; i++) {
+        if (strcmp(argv[i], "--light") == 0) {
+            light = true;
+        } else {
+            filename = argv[i];
+        }
+    }
     
     // Error out if we don't get a file
-    if (argc == 1) {
+    if (filename == NULL) {
         printf("usage: %s file.xml\n", argv[0]);
         return 0;
     }
@@ -58,23 +67,36 @@ int main(int argc, char* argv []) {
     
     // set a few colors we'll be using
     start_color();
-    init_pair(1, COLOR_BLACK,     COLOR_WHITE);
-    init_pair(2, COLOR_BLACK,     COLOR_RED);
-    init_pair(3, COLOR_BLACK,     COLOR_GREEN);
-    init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
-    init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
-    init_pair(6, COLOR_RED,       COLOR_BLACK);
+    
+    if (!light) {
+        init_pair(10, COLOR_WHITE,     COLOR_BLACK);
+        init_pair(1, COLOR_BLACK,     COLOR_WHITE);
+        init_pair(2, COLOR_BLACK,     COLOR_RED);
+        init_pair(3, COLOR_BLACK,     COLOR_GREEN);
+        init_pair(4, COLOR_YELLOW,    COLOR_BLACK);
+        init_pair(5, COLOR_BLACK,     COLOR_YELLOW);
+        init_pair(6, COLOR_RED,       COLOR_BLACK);
+    } else {
+        init_pair(10, COLOR_BLACK,     COLOR_WHITE);
+        init_pair(1, COLOR_WHITE,     COLOR_BLACK);
+        init_pair(2, COLOR_BLACK,     COLOR_RED);
+        init_pair(3, COLOR_BLACK,     COLOR_GREEN);
+        init_pair(4, COLOR_BLACK,     COLOR_YELLOW);
+        init_pair(5, COLOR_YELLOW,    COLOR_BLACK);
+        init_pair(6, COLOR_RED,       COLOR_WHITE);
+    }
+    bkgdset(COLOR_PAIR(10));
     
     // Display the pretty suxml banner I spent like a minute on
-    attrset(COLOR_PAIR(0));
+    attrset(COLOR_PAIR(10));
     printw(SUXML_BANNER);
     
-    printw("Parsing file %s...\n", argv[1]);
+    printw("Parsing file %s...\n", filename);
     // Attempt to parse the file
     XMLDocument xmldoc = XMLDocument();
     string error = "";
     try {
-        xmldoc.parse(argv[1]);
+        xmldoc.parse(filename);
     } catch (char const* message) {
         error = message;
     }
@@ -87,7 +109,7 @@ int main(int argc, char* argv []) {
     } else {
         attrset(COLOR_PAIR(6));
         printw("Error while parsing:");
-        attrset(COLOR_PAIR(0));
+        attrset(COLOR_PAIR(10));
         printw(" line %d: %s\n", xmldoc.last_parsed_line, error.c_str());
         printw("\n");
         printw("Error encountered while parsing.\n");
@@ -131,7 +153,7 @@ int main(int argc, char* argv []) {
                 if (ask("Really quit?")) break;
             } else if (command == 'w') { // WRITE
                 if (ask("Save?")) {
-                    ofstream fout (argv[1], ios::out);
+                    ofstream fout (filename, ios::out);
                     if (!fout.is_open() || !fout.good() || !fout || fout.fail()) {
                         throw "failed to write";
                     }
@@ -204,7 +226,7 @@ int main(int argc, char* argv []) {
                     printw(" Search for: ");
                     attrset(COLOR_PAIR(1));
                     printw((find_string).c_str());
-                    attrset(COLOR_PAIR(0));
+                    attrset(COLOR_PAIR(10));
                     printw(" ");
                     move(LINES-1, 13+find_string.length());
                 }
@@ -298,7 +320,7 @@ int main(int argc, char* argv []) {
             string line = line_and_select_x.first;
             int select_x = line_and_select_x.second;
             
-            attrset(COLOR_PAIR(0));
+            attrset(COLOR_PAIR(10));
             move(cursor-top, 0);
             // show the fact that we're editing a string
             if (editing) printw("*");
@@ -351,7 +373,7 @@ int main(int argc, char* argv []) {
                 move(cursor - top + ((select_x+edit_col - chars_fit + (COLS))/COLS),
                     (2 + (xmldoc.editor_lines[cursor].depth*2) + select_x + edit_col) % COLS);
             }
-            attrset(COLOR_PAIR(0));
+            attrset(COLOR_PAIR(10));
             
             // don't skip getch() next time
             skip = false;
@@ -398,7 +420,7 @@ int main(int argc, char* argv []) {
                     printw(xmldoc.editor_lines[line_num].text.substr(0, chars_fit-1).c_str());
                     attrset(COLOR_PAIR(1));
                     printw("$");
-                    attrset(COLOR_PAIR(0));
+                    attrset(COLOR_PAIR(10));
                 } else if (xmldoc.editor_lines[line_num].text.size()) {
                     printw(xmldoc.editor_lines[line_num].text.c_str());
                 } else {
@@ -413,7 +435,7 @@ int main(int argc, char* argv []) {
                     attrset(COLOR_PAIR(1));
                     printw(" ");
                 }
-                attrset(COLOR_PAIR(0));
+                attrset(COLOR_PAIR(10));
                 
                 if (!xmldoc.editor_lines[line_num].node->expanded
                     && xmldoc.editor_lines[line_num].node->is_expandable()) {
@@ -421,7 +443,7 @@ int main(int argc, char* argv []) {
                     move(y, 1+xmldoc.editor_lines[line_num].depth*2);
                     attrset(COLOR_PAIR(1));
                     printw("+");
-                    attrset(COLOR_PAIR(0));
+                    attrset(COLOR_PAIR(10));
                 }
             } else {
                 // line is beyond the end of the document
@@ -444,10 +466,10 @@ int main(int argc, char* argv []) {
             // (this is done to save screen estate yet make storage convenient)
             for (auto c : string(text)) {
                 if (c != '-') printw(string(1, c).c_str());
-                else attrset(COLOR_PAIR(0));
+                else attrset(COLOR_PAIR(10));
             }
             printw(" ");
-            attrset(COLOR_PAIR(0));
+            attrset(COLOR_PAIR(10));
             i++;
         }
         highlight_help_text = -1;
