@@ -106,6 +106,8 @@ int main(int argc, char* argv []) {
     // Report an error if one occurred
     if (error.length() == 0) {
         printw("File parsed successfully\n");
+    } else if (error == "cannot open file") {
+        printw("File doesn't exist and will be created when saving.\n");
     } else {
         attrset(COLOR_PAIR(6));
         printw("Error while parsing:");
