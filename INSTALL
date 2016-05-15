@@ -1,0 +1,3 @@
+To build suxml, run `make && sudo make install`.
+
+To build the Doxygen documentation, run `make doc`.
